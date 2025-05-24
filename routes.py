@@ -4,6 +4,7 @@ from app import app, db
 from models import Email, EmailConfig, User
 from email_service import EmailService
 from forms import LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm
+from security import security_manager, security_check, login_security_check, SecurityBan, SecurityLog
 from datetime import datetime
 import logging
 import os
@@ -33,8 +34,9 @@ def save_profile_picture(form_picture):
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
+@login_security_check
 def login():
-    """User login"""
+    """User login with security protection"""
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     
@@ -47,6 +49,9 @@ def login():
         ).first()
         
         if user and user.check_password(form.password.data):
+            # Record successful login
+            security_manager.record_successful_login(user)
+            
             login_user(user, remember=form.remember_me.data)
             user.last_login = datetime.utcnow()
             db.session.commit()
@@ -58,11 +63,14 @@ def login():
             flash(f'Welcome back, {user.full_name}!', 'success')
             return redirect(next_page)
         else:
+            # Record failed login attempt
+            security_manager.record_failed_login(form.username.data)
             flash('Invalid username or password', 'error')
     
     return render_template('login.html', form=form)
 
 @app.route('/register', methods=['GET', 'POST'])
+@security_check
 def register():
     """User registration"""
     if current_user.is_authenticated:
@@ -195,8 +203,9 @@ def profile():
 # Admin routes
 @app.route('/admin')
 @login_required
+@security_check
 def admin_dashboard():
-    """Admin dashboard"""
+    """Admin dashboard with security monitoring"""
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('index'))
@@ -207,6 +216,9 @@ def admin_dashboard():
     admin_users = User.query.filter_by(is_admin=True).count()
     total_emails = Email.query.count()
     
+    # Get security statistics
+    security_stats = security_manager.get_security_stats()
+    
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
     
     return render_template('admin/dashboard.html',
@@ -214,6 +226,7 @@ def admin_dashboard():
                          active_users=active_users,
                          admin_users=admin_users,
                          total_emails=total_emails,
+                         security_stats=security_stats,
                          recent_users=recent_users)
 
 @app.route('/admin/users')
@@ -259,6 +272,64 @@ def admin_edit_user(user_id):
         form.is_verified.data = user.is_verified
     
     return render_template('admin/edit_user.html', form=form, user=user)
+
+# Security management routes
+@app.route('/admin/security')
+@login_required
+@security_check
+def admin_security():
+    """Admin security dashboard"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    # Get security data
+    active_bans = SecurityBan.query.filter_by(is_active=True).order_by(SecurityBan.created_at.desc()).all()
+    recent_logs = SecurityLog.query.order_by(SecurityLog.timestamp.desc()).limit(50).all()
+    security_stats = security_manager.get_security_stats()
+    
+    return render_template('admin/security.html',
+                         active_bans=active_bans,
+                         recent_logs=recent_logs,
+                         security_stats=security_stats)
+
+@app.route('/admin/security/unban/<string:ip_address>', methods=['POST'])
+@login_required
+@security_check
+def admin_unban_ip(ip_address):
+    """Unban an IP address"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    if security_manager.unban_ip(ip_address):
+        flash(f'IP address {ip_address} has been unbanned.', 'success')
+    else:
+        flash(f'IP address {ip_address} was not found in ban list.', 'error')
+    
+    return redirect(url_for('admin_security'))
+
+@app.route('/admin/security/ban', methods=['POST'])
+@login_required
+@security_check
+def admin_ban_ip():
+    """Manually ban an IP address"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    ip_address = request.form.get('ip_address')
+    reason = request.form.get('reason', 'Manually banned by admin')
+    ban_type = request.form.get('ban_type', 'temporary')
+    duration = int(request.form.get('duration', 24))
+    
+    if ip_address:
+        security_manager.ban_ip(ip_address, reason, ban_type, duration)
+        flash(f'IP address {ip_address} has been banned.', 'success')
+    else:
+        flash('IP address is required.', 'error')
+    
+    return redirect(url_for('admin_security'))
 
 @app.route('/compose', methods=['GET', 'POST'])
 @login_required

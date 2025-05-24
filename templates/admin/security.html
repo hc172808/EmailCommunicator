@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Security Management - Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="shield" class="me-2"></i>
+                Security Management
+            </h1>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                <i data-feather="arrow-left" class="me-2"></i>
+                Back to Admin
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Security Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-danger">
+            <div class="card-body text-center">
+                <i data-feather="alert-circle" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Active Bans</h5>
+                <h2 class="mb-0">{{ security_stats.active_bans }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning">
+            <div class="card-body text-center">
+                <i data-feather="x-circle" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Failed Logins (24h)</h5>
+                <h2 class="mb-0">{{ security_stats.failed_logins_24h }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success">
+            <div class="card-body text-center">
+                <i data-feather="check-circle" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Successful Logins (24h)</h5>
+                <h2 class="mb-0">{{ security_stats.successful_logins_24h }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info">
+            <div class="card-body text-center">
+                <i data-feather="eye" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Suspicious Activity (7d)</h5>
+                <h2 class="mb-0">{{ security_stats.suspicious_activity_week }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Ban Tool -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="user-x" class="me-2"></i>
+                    Manual IP Ban
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_ban_ip') }}">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label for="ip_address" class="form-label">IP Address</label>
+                            <input type="text" class="form-control" id="ip_address" name="ip_address" 
+                                   placeholder="192.168.1.1" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label for="ban_type" class="form-label">Ban Type</label>
+                            <select class="form-select" id="ban_type" name="ban_type">
+                                <option value="temporary">Temporary</option>
+                                <option value="permanent">Permanent</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label for="duration" class="form-label">Duration (hours)</label>
+                            <input type="number" class="form-control" id="duration" name="duration" 
+                                   value="24" min="1" max="8760">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="reason" class="form-label">Reason</label>
+                            <input type="text" class="form-control" id="reason" name="reason" 
+                                   placeholder="Manually banned by admin" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-danger">
+                        <i data-feather="ban" class="me-2"></i>
+                        Ban IP Address
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Bans -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="list" class="me-2"></i>
+                    Active IP Bans ({{ active_bans|length }})
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshBans()">
+                    <i data-feather="refresh-cw" class="me-1"></i>
+                    Refresh
+                </button>
+            </div>
+            <div class="card-body p-0">
+                {% if active_bans %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-secondary">
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Reason</th>
+                                    <th>Type</th>
+                                    <th>Attempts</th>
+                                    <th>Banned</th>
+                                    <th>Expires</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ban in active_bans %}
+                                <tr>
+                                    <td>
+                                        <code>{{ ban.ip_address }}</code>
+                                    </td>
+                                    <td>{{ ban.reason }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if ban.ban_type == 'permanent' else 'warning' }}">
+                                            {{ ban.ban_type.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ ban.attempts }}</span>
+                                    </td>
+                                    <td>
+                                        <small>{{ ban.created_at.strftime('%Y-%m-%d %H:%M') if ban.created_at else 'Unknown' }}</small>
+                                    </td>
+                                    <td>
+                                        {% if ban.ban_until %}
+                                            <small>{{ ban.ban_until.strftime('%Y-%m-%d %H:%M') }}</small>
+                                        {% else %}
+                                            <small class="text-muted">Never</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('admin_unban_ip', ip_address=ban.ip_address) }}" 
+                                              class="d-inline" onsubmit="return confirm('Unban this IP address?')">
+                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Unban">
+                                                <i data-feather="check" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i data-feather="shield-check" class="mb-3" style="width: 3rem; height: 3rem; opacity: 0.5;"></i>
+                        <h5 class="text-muted">No active bans</h5>
+                        <p class="text-muted">All clear! No IP addresses are currently banned.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Security Logs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="file-text" class="me-2"></i>
+                    Recent Security Events ({{ recent_logs|length }})
+                </h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="filterLogs('all')">All</button>
+                    <button class="btn btn-outline-danger" onclick="filterLogs('failed_login')">Failed Logins</button>
+                    <button class="btn btn-outline-warning" onclick="filterLogs('suspicious_activity')">Suspicious</button>
+                    <button class="btn btn-outline-info" onclick="filterLogs('ip_banned')">Bans</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_logs %}
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-secondary sticky-top">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>IP Address</th>
+                                    <th>Event</th>
+                                    <th>Details</th>
+                                    <th>Endpoint</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_logs %}
+                                <tr class="log-row" data-event-type="{{ log.event_type }}">
+                                    <td>
+                                        <small>{{ log.timestamp.strftime('%H:%M:%S') if log.timestamp else 'Unknown' }}</small>
+                                    </td>
+                                    <td>
+                                        <code>{{ log.ip_address }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if log.event_type == 'failed_login' %}danger{% elif log.event_type == 'suspicious_activity' %}warning{% elif log.event_type == 'ip_banned' %}info{% else %}secondary{% endif %}">
+                                            {{ log.event_type.replace('_', ' ').title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if log.event_data %}
+                                            <small class="text-muted">{{ log.event_data[:100] }}{% if log.event_data|length > 100 %}...{% endif %}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ log.method }} {{ log.endpoint or '-' }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i data-feather="file" class="mb-3" style="width: 3rem; height: 3rem; opacity: 0.5;"></i>
+                        <h5 class="text-muted">No security events</h5>
+                        <p class="text-muted">Security logs will appear here as events occur.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshBans() {
+    window.location.reload();
+}
+
+function filterLogs(eventType) {
+    const rows = document.querySelectorAll('.log-row');
+    
+    rows.forEach(row => {
+        const rowEventType = row.dataset.eventType;
+        const show = eventType === 'all' || rowEventType === eventType;
+        row.style.display = show ? '' : 'none';
+    });
+    
+    // Update button states
+    document.querySelectorAll('.btn-group button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
+
+// Auto-refresh every 30 seconds
+setInterval(() => {
+    window.location.reload();
+}, 30000);
+</script>
+{% endblock %}
