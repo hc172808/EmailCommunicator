@@ -1,21 +1,137 @@
-from flask import render_template, request, redirect, url_for, flash, jsonify
+from flask import render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
-from models import Email, EmailConfig
+from models import Email, EmailConfig, User
 from email_service import EmailService
+from forms import LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm
 from datetime import datetime
 import logging
+import os
+from werkzeug.utils import secure_filename
+from PIL import Image
 
 email_service = EmailService()
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
+
+def save_profile_picture(form_picture):
+    random_hex = os.urandom(8).hex()
+    _, f_ext = os.path.splitext(form_picture.filename)
+    picture_fn = random_hex + f_ext
+    picture_path = os.path.join(app.root_path, 'static/profile_pics', picture_fn)
+    
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(picture_path), exist_ok=True)
+    
+    output_size = (150, 150)
+    img = Image.open(form_picture)
+    img.thumbnail(output_size)
+    img.save(picture_path)
+    
+    return picture_fn
+
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """User login"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        # Check if login is username or email
+        user = User.query.filter(
+            (User.username == form.username.data) | 
+            (User.email == form.username.data)
+        ).first()
+        
+        if user and user.check_password(form.password.data):
+            login_user(user, remember=form.remember_me.data)
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+            
+            next_page = request.args.get('next')
+            if not next_page or not next_page.startswith('/'):
+                next_page = url_for('index')
+            
+            flash(f'Welcome back, {user.full_name}!', 'success')
+            return redirect(next_page)
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html', form=form)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        try:
+            # Handle profile picture upload
+            profile_picture = None
+            if form.profile_photo.data:
+                profile_picture = save_profile_picture(form.profile_photo.data)
+            
+            # Create new user
+            user = User(
+                username=form.username.data,
+                email=form.email.data,
+                full_name=form.full_name.data,
+                phone_number=form.phone_number.data,
+                location=form.location.data,
+                bio=form.bio.data,
+                profile_photo=profile_picture,
+                smtp_server=form.smtp_server.data,
+                smtp_port=int(form.smtp_port.data) if form.smtp_port.data else None,
+                smtp_username=form.smtp_username.data,
+                smtp_password=form.smtp_password.data,
+                imap_server=form.imap_server.data,
+                imap_port=int(form.imap_port.data) if form.imap_port.data else None,
+                use_tls=form.use_tls.data
+            )
+            user.set_password(form.password.data)
+            
+            db.session.add(user)
+            db.session.commit()
+            
+            flash('Registration successful! You can now log in.', 'success')
+            return redirect(url_for('login'))
+            
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Registration error: {str(e)}")
+            flash('Registration failed. Please try again.', 'error')
+    
+    return render_template('register.html', form=form)
+
+@app.route('/logout')
+@login_required
+def logout():
+    """User logout"""
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     """Main dashboard showing email statistics"""
-    total_emails = Email.query.count()
-    sent_emails = Email.query.filter_by(is_sent=True).count()
-    received_emails = Email.query.filter_by(is_received=True).count()
-    draft_emails = Email.query.filter_by(is_draft=True).count()
+    # Get user's emails
+    user_emails = Email.query.filter(
+        (Email.sender_id == current_user.id) | 
+        (Email.recipient_id == current_user.id)
+    )
     
-    recent_emails = Email.query.order_by(Email.created_at.desc()).limit(5).all()
+    total_emails = user_emails.count()
+    sent_emails = user_emails.filter_by(is_sent=True, sender_id=current_user.id).count()
+    received_emails = user_emails.filter_by(is_received=True, recipient_id=current_user.id).count()
+    draft_emails = user_emails.filter_by(is_draft=True, sender_id=current_user.id).count()
+    
+    recent_emails = user_emails.order_by(Email.created_at.desc()).limit(5).all()
     
     return render_template('index.html', 
                          total_emails=total_emails,
@@ -24,7 +140,128 @@ def index():
                          draft_emails=draft_emails,
                          recent_emails=recent_emails)
 
+# Profile management routes
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile management"""
+    form = ProfileForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Handle profile picture upload
+            if form.profile_photo.data:
+                picture_file = save_profile_picture(form.profile_photo.data)
+                current_user.profile_photo = picture_file
+            
+            # Update user information
+            current_user.full_name = form.full_name.data
+            current_user.phone_number = form.phone_number.data
+            current_user.location = form.location.data
+            current_user.bio = form.bio.data
+            current_user.smtp_server = form.smtp_server.data
+            current_user.smtp_port = int(form.smtp_port.data) if form.smtp_port.data else None
+            current_user.smtp_username = form.smtp_username.data
+            if form.smtp_password.data:
+                current_user.smtp_password = form.smtp_password.data
+            current_user.imap_server = form.imap_server.data
+            current_user.imap_port = int(form.imap_port.data) if form.imap_port.data else None
+            current_user.use_tls = form.use_tls.data
+            
+            db.session.commit()
+            flash('Your profile has been updated!', 'success')
+            return redirect(url_for('profile'))
+            
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Profile update error: {str(e)}")
+            flash('Profile update failed. Please try again.', 'error')
+    
+    elif request.method == 'GET':
+        # Pre-populate form with current user data
+        form.full_name.data = current_user.full_name
+        form.phone_number.data = current_user.phone_number
+        form.location.data = current_user.location
+        form.bio.data = current_user.bio
+        form.smtp_server.data = current_user.smtp_server
+        form.smtp_port.data = str(current_user.smtp_port) if current_user.smtp_port else ''
+        form.smtp_username.data = current_user.smtp_username
+        form.imap_server.data = current_user.imap_server
+        form.imap_port.data = str(current_user.imap_port) if current_user.imap_port else ''
+        form.use_tls.data = current_user.use_tls
+    
+    return render_template('profile.html', form=form)
+
+# Admin routes
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    """Admin dashboard"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    # Get statistics
+    total_users = User.query.count()
+    active_users = User.query.filter_by(active=True).count()
+    admin_users = User.query.filter_by(is_admin=True).count()
+    total_emails = Email.query.count()
+    
+    recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+    
+    return render_template('admin/dashboard.html',
+                         total_users=total_users,
+                         active_users=active_users,
+                         admin_users=admin_users,
+                         total_emails=total_emails,
+                         recent_users=recent_users)
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    """Admin user management"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    users = User.query.order_by(User.created_at.desc()).all()
+    return render_template('admin/users.html', users=users)
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+def admin_edit_user(user_id):
+    """Admin edit user"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    user = User.query.get_or_404(user_id)
+    form = AdminUserForm()
+    
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.email = form.email.data
+        user.full_name = form.full_name.data
+        user.active = form.active.data
+        user.is_admin = form.is_admin.data
+        user.is_verified = form.is_verified.data
+        
+        db.session.commit()
+        flash(f'User {user.username} has been updated!', 'success')
+        return redirect(url_for('admin_users'))
+    
+    elif request.method == 'GET':
+        form.username.data = user.username
+        form.email.data = user.email
+        form.full_name.data = user.full_name
+        form.active.data = user.active
+        form.is_admin.data = user.is_admin
+        form.is_verified.data = user.is_verified
+    
+    return render_template('admin/edit_user.html', form=form, user=user)
+
 @app.route('/compose', methods=['GET', 'POST'])
+@login_required
 def compose():
     """Compose and send new email"""
     if request.method == 'POST':
