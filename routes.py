@@ -6,6 +6,7 @@ from email_service import EmailService
 from forms import LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm
 from security import security_manager, security_check, login_security_check, SecurityBan, SecurityLog
 from backup_service import backup_service
+from domain_config import domain_manager, DomainConfig
 from datetime import datetime
 import logging
 import os
@@ -454,6 +455,198 @@ def admin_cleanup_backups():
         logging.error(f"Backup cleanup failed: {str(e)}")
     
     return redirect(url_for('admin_backup'))
+
+# Domain management routes
+@app.route('/admin/domains')
+@login_required
+@security_check
+def admin_domains():
+    """Admin domain management"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    domains = DomainConfig.query.all()
+    return render_template('admin/domains.html', domains=domains)
+
+@app.route('/admin/domains/add', methods=['POST'])
+@login_required
+@security_check
+def admin_add_domain():
+    """Add new domain"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    domain_name = request.form.get('domain_name')
+    is_primary = 'is_primary' in request.form
+    
+    if domain_name:
+        success, result = domain_manager.add_domain(domain_name, is_primary)
+        if success:
+            flash(f'Domain {domain_name} added successfully!', 'success')
+        else:
+            flash(f'Failed to add domain: {result}', 'error')
+    else:
+        flash('Domain name is required.', 'error')
+    
+    return redirect(url_for('admin_domains'))
+
+@app.route('/admin/domains/<int:domain_id>/ssl', methods=['POST'])
+@login_required
+@security_check
+def admin_configure_ssl(domain_id):
+    """Configure SSL for domain"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    domain = DomainConfig.query.get_or_404(domain_id)
+    auto_ssl = 'auto_ssl' in request.form
+    
+    success, message = domain_manager.configure_ssl(domain.domain_name, auto_ssl)
+    if success:
+        flash(f'SSL configuration updated for {domain.domain_name}', 'success')
+    else:
+        flash(f'SSL configuration failed: {message}', 'error')
+    
+    return redirect(url_for('admin_domains'))
+
+# API routes for mobile app
+@app.route('/api/auth/login', methods=['POST'])
+def api_login():
+    """API login for mobile app"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        user = User.query.filter(
+            (User.username == username) | (User.email == username)
+        ).first()
+        
+        if user and user.check_password(password) and user.active:
+            # Generate API token for mobile
+            import jwt
+            import os
+            
+            payload = {
+                'user_id': user.id,
+                'username': user.username,
+                'exp': datetime.utcnow().timestamp() + 86400  # 24 hours
+            }
+            
+            token = jwt.encode(payload, os.environ.get('SESSION_SECRET', 'secret'), algorithm='HS256')
+            
+            return jsonify({
+                'success': True,
+                'token': token,
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'full_name': user.full_name,
+                    'profile_photo': user.profile_photo
+                }
+            })
+        else:
+            return jsonify({'error': 'Invalid credentials'}), 401
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/emails', methods=['GET'])
+def api_get_emails():
+    """Get emails for mobile app"""
+    try:
+        # Verify API token
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Authorization token required'}), 401
+        
+        import jwt
+        payload = jwt.decode(token, os.environ.get('SESSION_SECRET', 'secret'), algorithms=['HS256'])
+        user_id = payload['user_id']
+        
+        # Get user's emails
+        emails = Email.query.filter(
+            (Email.sender_id == user_id) | (Email.recipient_id == user_id)
+        ).order_by(Email.created_at.desc()).limit(50).all()
+        
+        return jsonify({
+            'success': True,
+            'emails': [email.to_dict() for email in emails]
+        })
+        
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/emails/send', methods=['POST'])
+def api_send_email():
+    """Send email via API for mobile app"""
+    try:
+        # Verify API token
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Authorization token required'}), 401
+        
+        import jwt
+        payload = jwt.decode(token, os.environ.get('SESSION_SECRET', 'secret'), algorithms=['HS256'])
+        user_id = payload['user_id']
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        data = request.get_json()
+        recipient = data.get('recipient')
+        subject = data.get('subject')
+        body = data.get('body')
+        
+        if not all([recipient, subject, body]):
+            return jsonify({'error': 'Recipient, subject, and body are required'}), 400
+        
+        # Create email
+        email = Email(
+            sender=user.email,
+            recipient=recipient,
+            sender_id=user.id,
+            subject=subject,
+            body_text=body,
+            is_draft=False
+        )
+        
+        db.session.add(email)
+        db.session.commit()
+        
+        # Send email
+        email_service = EmailService()
+        success, message = email_service.send_email(email)
+        
+        if success:
+            email.is_sent = True
+            email.sent_at = datetime.utcnow()
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Email sent successfully',
+                'email_id': email.id
+            })
+        else:
+            email.error_message = message
+            db.session.commit()
+            return jsonify({'error': f'Failed to send email: {message}'}), 500
+            
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expired'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/compose', methods=['GET', 'POST'])
 @login_required
