@@ -1,0 +1,270 @@
+/* Custom CSS for Email Server */
+
+/* Avatar circles for user initials */
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+/* Email content styling */
+.email-content {
+    line-height: 1.6;
+}
+
+.text-content {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.html-preview {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Email row hover effects */
+.email-row {
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+}
+
+.email-row:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
+/* Status badges */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Navigation improvements */
+.navbar-brand {
+    display: flex;
+    align-items: center;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+}
+
+/* Card enhancements */
+.card {
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+    background-color: var(--bs-secondary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+/* Form improvements */
+.form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Email preview styling */
+.email-preview {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.9rem;
+}
+
+.preview-header {
+    font-size: 0.85rem;
+}
+
+.preview-body {
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Statistics cards on dashboard */
+.card.bg-primary,
+.card.bg-success,
+.card.bg-info,
+.card.bg-warning {
+    color: white;
+}
+
+.card.bg-primary .card-title,
+.card.bg-success .card-title,
+.card.bg-info .card-title,
+.card.bg-warning .card-title {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Loading states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .avatar-circle {
+        width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.9rem;
+    }
+    
+    .email-meta .badge {
+        font-size: 0.7rem;
+        margin-bottom: 0.25rem;
+    }
+}
+
+/* Code blocks */
+pre {
+    background-color: var(--bs-dark);
+    color: var(--bs-light);
+    border-radius: var(--bs-border-radius);
+    font-size: 0.85rem;
+}
+
+/* Alert improvements */
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.alert-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+}
+
+footer .container {
+    border-top: 1px solid var(--bs-border-color);
+}
+
+/* Utility classes */
+.text-decoration-none:hover {
+    text-decoration: underline !important;
+}
+
+/* Email composition improvements */
+#composeForm .form-label {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+/* Button group improvements */
+.btn-group .btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Table improvements */
+.table th {
+    font-weight: 600;
+    border-bottom: 2px solid var(--bs-border-color);
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
+/* Empty state styling */
+.text-center.py-5 {
+    padding: 3rem 1rem !important;
+}
+
+.text-center.py-5 i[data-feather] {
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+
+/* Checkbox styling improvements */
+.form-check-input:checked {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+/* Modal and overlay improvements */
+.modal-content {
+    border: 1px solid var(--bs-border-color);
+}
+
+/* Print styles */
+@media print {
+    .navbar,
+    .btn,
+    .btn-group,
+    footer {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #000 !important;
+        box-shadow: none !important;
+    }
+    
+    .email-content {
+        font-size: 12pt;
+        line-height: 1.4;
+    }
+}
+
+/* Accessibility improvements */
+.btn:focus,
+.form-control:focus,
+.form-check-input:focus {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+/* Custom scrollbar for webkit browsers */
+.html-preview::-webkit-scrollbar {
+    width: 6px;
+}
+
+.html-preview::-webkit-scrollbar-track {
+    background: var(--bs-secondary-bg);
+}
+
+.html-preview::-webkit-scrollbar-thumb {
+    background: var(--bs-secondary);
+    border-radius: 3px;
+}
+
+.html-preview::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-secondary-color);
+}

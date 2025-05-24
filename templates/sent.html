@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}{% if page_title %}{{ page_title }}{% else %}Sent{% endif %} - Email Server{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                {% if page_title and page_title == 'Drafts' %}
+                    <i data-feather="file-text" class="me-2"></i>
+                    Drafts
+                {% else %}
+                    <i data-feather="send" class="me-2"></i>
+                    Sent Mail
+                {% endif %}
+            </h1>
+            <a href="{{ url_for('compose') }}" class="btn btn-primary">
+                <i data-feather="edit" class="me-2"></i>
+                Compose
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if emails %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    {% if page_title and page_title == 'Drafts' %}
+                        <i data-feather="file-text" class="me-2"></i>
+                        Draft Messages ({{ emails|length }})
+                    {% else %}
+                        <i data-feather="send" class="me-2"></i>
+                        Sent Messages ({{ emails|length }})
+                    {% endif %}
+                </h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="selectAll()">
+                        <i data-feather="check-square" class="me-1"></i>
+                        Select All
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="deleteSelected()" disabled id="deleteBtn">
+                        <i data-feather="trash-2" class="me-1"></i>
+                        Delete Selected
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th width="50">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllCheck" onchange="toggleSelectAll()">
+                                    </div>
+                                </th>
+                                <th>To</th>
+                                <th>Subject</th>
+                                <th>
+                                    {% if page_title and page_title == 'Drafts' %}
+                                        Created
+                                    {% else %}
+                                        Sent
+                                    {% endif %}
+                                </th>
+                                <th>Status</th>
+                                <th width="120">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for email in emails %}
+                            <tr class="email-row" data-email-id="{{ email.id }}">
+                                <td>
+                                    <div class="form-check">
+                                        <input class="form-check-input email-checkbox" type="checkbox" 
+                                               value="{{ email.id }}" onchange="updateDeleteButton()">
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle bg-secondary text-white me-2">
+                                            {{ email.recipient[0].upper() if email.recipient else '?' }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-medium">
+                                                {{ email.recipient.split('@')[0] if email.recipient else 'Unknown' }}
+                                            </div>
+                                            <small class="text-muted">{{ email.recipient }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('email_detail', email_id=email.id) }}" 
+                                       class="text-decoration-none">
+                                        <div class="fw-medium">
+                                            {{ email.subject if email.subject else '(No Subject)' }}
+                                        </div>
+                                        <small class="text-muted">
+                                            {% if email.body_text %}
+                                                {{ email.body_text[:100] }}{% if email.body_text|length > 100 %}...{% endif %}
+                                            {% else %}
+                                                (No preview available)
+                                            {% endif %}
+                                        </small>
+                                    </a>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        {% if email.sent_at and not email.is_draft %}
+                                            <div>{{ email.sent_at.strftime('%b %d') }}</div>
+                                            <div>{{ email.sent_at.strftime('%H:%M') }}</div>
+                                        {% elif email.created_at %}
+                                            <div>{{ email.created_at.strftime('%b %d') }}</div>
+                                            <div>{{ email.created_at.strftime('%H:%M') }}</div>
+                                        {% else %}
+                                            Unknown
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td>
+                                    {% if email.is_draft %}
+                                        <span class="badge bg-warning">
+                                            <i data-feather="file-text" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            Draft
+                                        </span>
+                                    {% elif email.is_sent %}
+                                        <span class="badge bg-success">
+                                            <i data-feather="check" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            Sent
+                                        </span>
+                                    {% elif email.error_message %}
+                                        <span class="badge bg-danger" title="{{ email.error_message }}">
+                                            <i data-feather="alert-circle" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            Failed
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i data-feather="clock" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            Pending
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('email_detail', email_id=email.id) }}" 
+                                           class="btn btn-outline-secondary" title="View">
+                                            <i data-feather="eye" style="width: 0.8rem; height: 0.8rem;"></i>
+                                        </a>
+                                        
+                                        {% if email.is_draft %}
+                                        <a href="{{ url_for('edit_draft', email_id=email.id) }}" 
+                                           class="btn btn-outline-primary" title="Edit">
+                                            <i data-feather="edit" style="width: 0.8rem; height: 0.8rem;"></i>
+                                        </a>
+                                        <form method="POST" action="{{ url_for('send_draft', email_id=email.id) }}" 
+                                              class="d-inline" onsubmit="return confirm('Send this draft?')">
+                                            <button type="submit" class="btn btn-outline-success" title="Send">
+                                                <i data-feather="send" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        
+                                        <form method="POST" action="{{ url_for('delete_email', email_id=email.id) }}" 
+                                              class="d-inline" onsubmit="return confirm('Are you sure you want to delete this email?')">
+                                            <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                                <i data-feather="trash-2" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Empty State -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                {% if page_title and page_title == 'Drafts' %}
+                    <i data-feather="file-text" class="mb-3 text-muted" style="width: 4rem; height: 4rem;"></i>
+                    <h3 class="text-muted mb-3">No drafts saved</h3>
+                    <p class="text-muted mb-4">
+                        You don't have any draft emails. Start composing a message and save it as a draft to see it here.
+                    </p>
+                {% else %}
+                    <i data-feather="send" class="mb-3 text-muted" style="width: 4rem; height: 4rem;"></i>
+                    <h3 class="text-muted mb-3">No emails sent</h3>
+                    <p class="text-muted mb-4">
+                        You haven't sent any emails yet. Compose and send your first email to see it here.
+                    </p>
+                {% endif %}
+                
+                <a href="{{ url_for('compose') }}" class="btn btn-primary">
+                    <i data-feather="edit" class="me-2"></i>
+                    Compose Email
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function selectAll() {
+    const checkboxes = document.querySelectorAll('.email-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+    });
+    
+    document.getElementById('selectAllCheck').checked = !allChecked;
+    updateDeleteButton();
+}
+
+function toggleSelectAll() {
+    const selectAllCheck = document.getElementById('selectAllCheck');
+    const checkboxes = document.querySelectorAll('.email-checkbox');
+    
+    checkboxes.forEach(cb => {
+        cb.checked = selectAllCheck.checked;
+    });
+    
+    updateDeleteButton();
+}
+
+function updateDeleteButton() {
+    const checkboxes = document.querySelectorAll('.email-checkbox:checked');
+    const deleteBtn = document.getElementById('deleteBtn');
+    
+    if (checkboxes.length > 0) {
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = `<i data-feather="trash-2" class="me-1"></i> Delete Selected (${checkboxes.length})`;
+    } else {
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<i data-feather="trash-2" class="me-1"></i> Delete Selected';
+    }
+    
+    // Re-initialize feather icons
+    feather.replace();
+}
+
+function deleteSelected() {
+    const checkboxes = document.querySelectorAll('.email-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${checkboxes.length} email(s)?`)) {
+        return;
+    }
+    
+    // Delete emails one by one
+    const emailIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    Promise.all(emailIds.map(id => {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/email/${id}/delete`;
+        
+        return fetch(form.action, {
+            method: 'POST'
+        });
+    })).then(() => {
+        window.location.reload();
+    }).catch(error => {
+        console.error('Error deleting emails:', error);
+        alert('Error deleting some emails. Please try again.');
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Email Server{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i data-feather="home" class="me-2"></i>
+            Email Server Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-primary">
+            <div class="card-body text-center">
+                <i data-feather="mail" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Total Emails</h5>
+                <h2 class="mb-0">{{ total_emails }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success">
+            <div class="card-body text-center">
+                <i data-feather="send" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Sent</h5>
+                <h2 class="mb-0">{{ sent_emails }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info">
+            <div class="card-body text-center">
+                <i data-feather="inbox" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Received</h5>
+                <h2 class="mb-0">{{ received_emails }}</h2>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning">
+            <div class="card-body text-center">
+                <i data-feather="file-text" class="mb-2" style="width: 2rem; height: 2rem;"></i>
+                <h5 class="card-title">Drafts</h5>
+                <h2 class="mb-0">{{ draft_emails }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="zap" class="me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('compose') }}" class="btn btn-primary w-100">
+                            <i data-feather="edit" class="me-2"></i>
+                            Compose Email
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('inbox') }}" class="btn btn-secondary w-100">
+                            <i data-feather="inbox" class="me-2"></i>
+                            Check Inbox
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('sent') }}" class="btn btn-secondary w-100">
+                            <i data-feather="send" class="me-2"></i>
+                            View Sent
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('drafts') }}" class="btn btn-secondary w-100">
+                            <i data-feather="file-text" class="me-2"></i>
+                            View Drafts
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Emails -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="clock" class="me-2"></i>
+                    Recent Activity
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshEmails()">
+                    <i data-feather="refresh-cw" class="me-1"></i>
+                    Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                {% if recent_emails %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>From/To</th>
+                                    <th>Subject</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for email in recent_emails %}
+                                <tr>
+                                    <td>
+                                        {% if email.is_sent %}
+                                            <span class="badge bg-success">
+                                                <i data-feather="send" style="width: 0.8rem; height: 0.8rem;"></i>
+                                                Sent
+                                            </span>
+                                        {% elif email.is_received %}
+                                            <span class="badge bg-info">
+                                                <i data-feather="inbox" style="width: 0.8rem; height: 0.8rem;"></i>
+                                                Received
+                                            </span>
+                                        {% elif email.is_draft %}
+                                            <span class="badge bg-warning">
+                                                <i data-feather="file-text" style="width: 0.8rem; height: 0.8rem;"></i>
+                                                Draft
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if email.is_sent or email.is_draft %}
+                                            <strong>To:</strong> {{ email.recipient }}
+                                        {% else %}
+                                            <strong>From:</strong> {{ email.sender }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('email_detail', email_id=email.id) }}" class="text-decoration-none">
+                                            {{ email.subject[:50] }}{% if email.subject|length > 50 %}...{% endif %}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ email.created_at.strftime('%Y-%m-%d %H:%M') if email.created_at else 'Unknown' }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('email_detail', email_id=email.id) }}" 
+                                               class="btn btn-outline-secondary" title="View">
+                                                <i data-feather="eye" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            </a>
+                                            {% if email.is_draft %}
+                                            <a href="{{ url_for('edit_draft', email_id=email.id) }}" 
+                                               class="btn btn-outline-primary" title="Edit">
+                                                <i data-feather="edit" style="width: 0.8rem; height: 0.8rem;"></i>
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i data-feather="mail" class="mb-3" style="width: 3rem; height: 3rem; opacity: 0.5;"></i>
+                        <h5 class="text-muted">No emails yet</h5>
+                        <p class="text-muted mb-3">Start by composing your first email</p>
+                        <a href="{{ url_for('compose') }}" class="btn btn-primary">
+                            <i data-feather="edit" class="me-2"></i>
+                            Compose Email
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshEmails() {
+    // Show loading state
+    const refreshBtn = document.querySelector('[onclick="refreshEmails()"]');
+    const originalContent = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i data-feather="loader" class="me-1"></i> Refreshing...';
+    refreshBtn.disabled = true;
+    
+    // Refresh the page after a short delay
+    setTimeout(() => {
+        window.location.reload();
+    }, 1000);
+}
+
+// Auto-refresh every 5 minutes
+setInterval(() => {
+    window.location.reload();
+}, 300000);
+</script>
+{% endblock %}
