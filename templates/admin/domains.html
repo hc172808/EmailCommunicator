@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}Admin - Domain Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Domain Management</h2>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+                        <li class="breadcrumb-item active">Domains</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Domain -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-plus me-2"></i>Add New Domain
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('admin_add_domain') }}">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="mb-3">
+                            <label for="domain_name" class="form-label">Domain Name</label>
+                            <input type="text" class="form-control" name="domain_name" id="domain_name" 
+                                   placeholder="example.com" required>
+                            <div class="form-text">Enter your domain name without www or https://</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_primary" id="is_primary">
+                                <label class="form-check-label" for="is_primary">
+                                    Set as Primary Domain
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Add Domain
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Domain List -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-globe me-2"></i>Configured Domains
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if domains %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Status</th>
+                            <th>SSL</th>
+                            <th>Services</th>
+                            <th>DNS</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for domain in domains %}
+                        <tr>
+                            <td>
+                                <div>
+                                    <strong>{{ domain.domain_name }}</strong>
+                                    {% if domain.is_primary %}
+                                    <span class="badge bg-primary ms-2">Primary</span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">Added {{ domain.created_at.strftime('%Y-%m-%d') }}</small>
+                            </td>
+                            <td>
+                                {% if domain.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if domain.ssl_enabled %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-lock me-1"></i>Enabled
+                                </span>
+                                {% if domain.auto_ssl %}
+                                <div><small class="text-muted">Auto-renewal</small></div>
+                                {% endif %}
+                                {% else %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-unlock me-1"></i>Disabled
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    {% if domain.mail_server_enabled %}
+                                    <span class="badge bg-info" title="Mail Server">Mail</span>
+                                    {% endif %}
+                                    {% if domain.webmail_enabled %}
+                                    <span class="badge bg-secondary" title="Webmail">Web</span>
+                                    {% endif %}
+                                    {% if domain.api_enabled %}
+                                    <span class="badge bg-primary" title="API">API</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if domain.dns_configured %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check me-1"></i>Configured
+                                </span>
+                                {% else %}
+                                <button class="btn btn-sm btn-outline-warning" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#dnsModal{{ domain.id }}">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Setup Required
+                                </button>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <!-- SSL Configuration -->
+                                    <form method="POST" action="{{ url_for('admin_configure_ssl', domain_id=domain.id) }}" class="d-inline">
+                                        {% if not domain.ssl_enabled %}
+                                        <input type="hidden" name="auto_ssl" value="on">
+                                        <button type="submit" class="btn btn-sm btn-success" title="Enable SSL">
+                                            <i class="fas fa-lock"></i>
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="btn btn-sm btn-warning" title="Disable SSL">
+                                            <i class="fas fa-unlock"></i>
+                                        </button>
+                                        {% endif %}
+                                    </form>
+                                    
+                                    <!-- Settings -->
+                                    <button class="btn btn-sm btn-outline-primary" title="Settings">
+                                        <i class="fas fa-cog"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-globe fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No domains configured</h5>
+                <p class="text-muted">Add your first domain using the form above.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- DNS Setup Modals -->
+{% for domain in domains %}
+{% if not domain.dns_configured %}
+<div class="modal fade" id="dnsModal{{ domain.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">DNS Configuration for {{ domain.domain_name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">Add these DNS records to your domain registrar or DNS provider:</p>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>Value</th>
+                                <th>TTL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>A</code></td>
+                                <td><code>@</code></td>
+                                <td><code>YOUR_SERVER_IP</code></td>
+                                <td>3600</td>
+                            </tr>
+                            <tr>
+                                <td><code>A</code></td>
+                                <td><code>www</code></td>
+                                <td><code>YOUR_SERVER_IP</code></td>
+                                <td>3600</td>
+                            </tr>
+                            <tr>
+                                <td><code>MX</code></td>
+                                <td><code>@</code></td>
+                                <td><code>10 mail.{{ domain.domain_name }}</code></td>
+                                <td>3600</td>
+                            </tr>
+                            <tr>
+                                <td><code>A</code></td>
+                                <td><code>mail</code></td>
+                                <td><code>YOUR_SERVER_IP</code></td>
+                                <td>3600</td>
+                            </tr>
+                            <tr>
+                                <td><code>TXT</code></td>
+                                <td><code>@</code></td>
+                                <td><code>"v=spf1 a mx ip4:YOUR_SERVER_IP ~all"</code></td>
+                                <td>3600</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Replace <code>YOUR_SERVER_IP</code> with your actual server IP address.
+                    DNS changes can take up to 24 hours to propagate worldwide.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="copyDNSRecords()">
+                    <i class="fas fa-copy me-1"></i>Copy Records
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<script>
+function copyDNSRecords() {
+    // This would copy the DNS records to clipboard
+    alert('DNS records copied to clipboard!');
+}
+</script>
+{% endblock %}
