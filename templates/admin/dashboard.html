@@ -74,9 +74,15 @@
                         </a>
                     </div>
                     <div class="col-md-3 mb-2">
-                        <a href="{{ url_for('index') }}" class="btn btn-secondary w-100">
-                            <i data-feather="home" class="me-2"></i>
-                            View Dashboard
+                        <a href="{{ url_for('admin_security') }}" class="btn btn-warning w-100">
+                            <i data-feather="shield" class="me-2"></i>
+                            Security Monitor
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('admin_backup') }}" class="btn btn-info w-100">
+                            <i data-feather="hard-drive" class="me-2"></i>
+                            Backup System
                         </a>
                     </div>
                     <div class="col-md-3 mb-2">
@@ -84,12 +90,6 @@
                             <i data-feather="edit" class="me-2"></i>
                             Compose Email
                         </a>
-                    </div>
-                    <div class="col-md-3 mb-2">
-                        <button class="btn btn-outline-secondary w-100" onclick="refreshData()">
-                            <i data-feather="refresh-cw" class="me-2"></i>
-                            Refresh Data
-                        </button>
                     </div>
                 </div>
             </div>

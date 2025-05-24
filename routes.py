@@ -5,6 +5,7 @@ from models import Email, EmailConfig, User
 from email_service import EmailService
 from forms import LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm
 from security import security_manager, security_check, login_security_check, SecurityBan, SecurityLog
+from backup_service import backup_service
 from datetime import datetime
 import logging
 import os
@@ -330,6 +331,129 @@ def admin_ban_ip():
         flash('IP address is required.', 'error')
     
     return redirect(url_for('admin_security'))
+
+# Backup management routes
+@app.route('/admin/backup')
+@login_required
+@security_check
+def admin_backup():
+    """Admin backup management dashboard"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    # Get external drives
+    external_drives = backup_service.detect_external_drives()
+    
+    # Get backup configuration
+    backup_config = backup_service.get_backup_config()
+    
+    # Get list of existing backups
+    backups = backup_service.list_backups(backup_config.get('external_drive_path'))
+    
+    return render_template('admin/backup.html',
+                         external_drives=external_drives,
+                         backup_config=backup_config,
+                         backups=backups)
+
+@app.route('/admin/backup/create', methods=['POST'])
+@login_required
+@security_check
+def admin_create_backup():
+    """Create a new backup"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        external_drive_path = request.form.get('external_drive_path')
+        backup_info = backup_service.create_full_backup(external_drive_path)
+        
+        flash('Backup created successfully!', 'success')
+        logging.info(f"Backup created by admin {current_user.username}: {backup_info}")
+        
+    except Exception as e:
+        flash(f'Backup failed: {str(e)}', 'error')
+        logging.error(f"Backup creation failed: {str(e)}")
+    
+    return redirect(url_for('admin_backup'))
+
+@app.route('/admin/backup/config', methods=['POST'])
+@login_required
+@security_check
+def admin_backup_config():
+    """Update backup configuration"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        config = {
+            'auto_backup_enabled': 'auto_backup_enabled' in request.form,
+            'backup_frequency': request.form.get('backup_frequency', 'daily'),
+            'retention_days': int(request.form.get('retention_days', 30)),
+            'backup_database': 'backup_database' in request.form,
+            'backup_files': 'backup_files' in request.form,
+            'backup_configs': 'backup_configs' in request.form,
+            'compression_enabled': 'compression_enabled' in request.form,
+            'external_drive_path': request.form.get('external_drive_path')
+        }
+        
+        backup_service.update_backup_config(config)
+        flash('Backup configuration updated successfully!', 'success')
+        
+    except Exception as e:
+        flash(f'Configuration update failed: {str(e)}', 'error')
+        logging.error(f"Backup config update failed: {str(e)}")
+    
+    return redirect(url_for('admin_backup'))
+
+@app.route('/admin/backup/delete/<path:backup_id>', methods=['POST'])
+@login_required
+@security_check
+def admin_delete_backup(backup_id):
+    """Delete a backup"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Decode the backup path
+        import base64
+        backup_path = base64.b64decode(backup_id.encode()).decode()
+        
+        if backup_service.delete_backup(backup_path):
+            flash('Backup deleted successfully!', 'success')
+        else:
+            flash('Failed to delete backup.', 'error')
+            
+    except Exception as e:
+        flash(f'Delete operation failed: {str(e)}', 'error')
+        logging.error(f"Backup deletion failed: {str(e)}")
+    
+    return redirect(url_for('admin_backup'))
+
+@app.route('/admin/backup/cleanup', methods=['POST'])
+@login_required
+@security_check
+def admin_cleanup_backups():
+    """Clean up old backups"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        backup_config = backup_service.get_backup_config()
+        external_drive_path = backup_config.get('external_drive_path')
+        
+        cleaned_count = backup_service.cleanup_old_backups(external_drive_path)
+        flash(f'Cleaned up {cleaned_count} old backup(s).', 'success')
+        
+    except Exception as e:
+        flash(f'Cleanup failed: {str(e)}', 'error')
+        logging.error(f"Backup cleanup failed: {str(e)}")
+    
+    return redirect(url_for('admin_backup'))
 
 @app.route('/compose', methods=['GET', 'POST'])
 @login_required

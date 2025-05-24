@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}Admin - Backup Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Backup Management</h2>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard') }}">Admin</a></li>
+                        <li class="breadcrumb-item active">Backup</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-save me-2"></i>Create Backup
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_create_backup') }}">
+                        <div class="mb-3">
+                            <label for="external_drive_path" class="form-label">External Drive (Optional)</label>
+                            <select class="form-select" name="external_drive_path" id="external_drive_path">
+                                <option value="">Local Storage</option>
+                                {% for drive in external_drives %}
+                                <option value="{{ drive.mountpoint }}" 
+                                        {% if backup_config.external_drive_path == drive.mountpoint %}selected{% endif %}>
+                                    {{ drive.device }} - {{ drive.mountpoint }} 
+                                    ({{ drive.free_gb }}GB free / {{ drive.total_gb }}GB total)
+                                    {% if drive.is_removable %}<span class="badge bg-primary ms-1">USB</span>{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Choose where to store the backup. External drives are recommended for safety.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-play me-1"></i>Create Backup Now
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Backup Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="h4 text-primary">{{ backups|length }}</div>
+                            <small class="text-muted">Total Backups</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="h4 text-success">
+                                {{ backups|selectattr('location', 'equalto', 'external')|list|length }}
+                            </div>
+                            <small class="text-muted">External</small>
+                        </div>
+                        <div class="col-4">
+                            <div class="h4 text-info">
+                                {{ backups|selectattr('location', 'equalto', 'local')|list|length }}
+                            </div>
+                            <small class="text-muted">Local</small>
+                        </div>
+                    </div>
+                    {% if backup_config.auto_backup_enabled %}
+                    <div class="alert alert-success mt-3 mb-0">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Auto-backup enabled ({{ backup_config.backup_frequency }})
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        Auto-backup disabled
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Configuration -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-cog me-2"></i>Backup Configuration
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('admin_backup_config') }}">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="auto_backup_enabled" id="auto_backup_enabled"
+                                       {% if backup_config.auto_backup_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="auto_backup_enabled">
+                                    Enable Automatic Backups
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="backup_frequency" class="form-label">Backup Frequency</label>
+                            <select class="form-select" name="backup_frequency" id="backup_frequency">
+                                <option value="daily" {% if backup_config.backup_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                                <option value="weekly" {% if backup_config.backup_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
+                                <option value="monthly" {% if backup_config.backup_frequency == 'monthly' %}selected{% endif %}>Monthly</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="retention_days" class="form-label">Retention Days</label>
+                            <input type="number" class="form-control" name="retention_days" id="retention_days" 
+                                   value="{{ backup_config.retention_days }}" min="1" max="365">
+                            <div class="form-text">Delete backups older than this many days</div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">What to Backup</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="backup_database" id="backup_database"
+                                       {% if backup_config.backup_database %}checked{% endif %}>
+                                <label class="form-check-label" for="backup_database">
+                                    Database (PostgreSQL)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="backup_files" id="backup_files"
+                                       {% if backup_config.backup_files %}checked{% endif %}>
+                                <label class="form-check-label" for="backup_files">
+                                    Files (Profile pictures, templates, code)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="backup_configs" id="backup_configs"
+                                       {% if backup_config.backup_configs %}checked{% endif %}>
+                                <label class="form-check-label" for="backup_configs">
+                                    Configuration Files
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="compression_enabled" id="compression_enabled"
+                                       {% if backup_config.compression_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="compression_enabled">
+                                    Enable Compression (ZIP)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="config_external_drive_path" class="form-label">Default External Drive</label>
+                            <select class="form-select" name="external_drive_path" id="config_external_drive_path">
+                                <option value="">None (Local Storage)</option>
+                                {% for drive in external_drives %}
+                                <option value="{{ drive.mountpoint }}" 
+                                        {% if backup_config.external_drive_path == drive.mountpoint %}selected{% endif %}>
+                                    {{ drive.device }} - {{ drive.mountpoint }} 
+                                    ({{ drive.free_gb }}GB free)
+                                    {% if drive.is_removable %}<span class="badge bg-primary ms-1">USB</span>{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-1"></i>Save Configuration
+                    </button>
+                    <form method="POST" action="{{ url_for('admin_cleanup_backups') }}" class="d-inline">
+                        <button type="submit" class="btn btn-warning" onclick="return confirm('Clean up old backups according to retention policy?')">
+                            <i class="fas fa-broom me-1"></i>Cleanup Old Backups
+                        </button>
+                    </form>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- External Drives -->
+    {% if external_drives %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-hdd me-2"></i>Detected Storage Devices
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Mount Point</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Free Space</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for drive in external_drives %}
+                        <tr>
+                            <td>{{ drive.device }}</td>
+                            <td><code>{{ drive.mountpoint }}</code></td>
+                            <td>
+                                {{ drive.fstype }}
+                                {% if drive.is_removable %}
+                                <span class="badge bg-primary ms-1">Removable</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ drive.total_gb }} GB</td>
+                            <td>{{ drive.free_gb }} GB</td>
+                            <td>
+                                {% set usage_percent = ((drive.used_gb / drive.total_gb) * 100) | round(1) %}
+                                <div class="progress" style="width: 100px; height: 20px;">
+                                    <div class="progress-bar 
+                                         {% if usage_percent < 70 %}bg-success
+                                         {% elif usage_percent < 90 %}bg-warning
+                                         {% else %}bg-danger{% endif %}" 
+                                         style="width: {{ usage_percent }}%">
+                                        {{ usage_percent }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Existing Backups -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-history me-2"></i>Backup History
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if backups %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Location</th>
+                            <th>Size</th>
+                            <th>Contents</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in backups %}
+                        <tr>
+                            <td>
+                                <div>{{ backup.backup_date.split('T')[0] }}</div>
+                                <small class="text-muted">{{ backup.backup_date.split('T')[1].split('.')[0] }}</small>
+                            </td>
+                            <td>
+                                {% if backup.location == 'external' %}
+                                <span class="badge bg-success">External Drive</span>
+                                {% else %}
+                                <span class="badge bg-info">Local Storage</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if backup.backup_size %}
+                                {{ "%.1f"|format(backup.backup_size / (1024*1024)) }} MB
+                                {% else %}
+                                Unknown
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    {% if backup.database_backup %}
+                                    <span class="badge bg-primary" title="Database">DB</span>
+                                    {% endif %}
+                                    {% if backup.files_backup %}
+                                    <span class="badge bg-secondary" title="Files">Files</span>
+                                    {% endif %}
+                                    {% if backup.config_backup %}
+                                    <span class="badge bg-info" title="Configuration">Config</span>
+                                    {% endif %}
+                                    {% if backup.compressed %}
+                                    <span class="badge bg-warning" title="Compressed">ZIP</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if backup.database_error or backup.files_error or backup.config_error %}
+                                <span class="badge bg-warning">Partial</span>
+                                {% else %}
+                                <span class="badge bg-success">Complete</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin_delete_backup', backup_id=backup.backup_file|b64encode|decode) }}" 
+                                      class="d-inline" onsubmit="return confirm('Are you sure you want to delete this backup?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="fas fa-archive fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No backups found</h5>
+                <p class="text-muted">Create your first backup using the form above.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.progress {
+    border-radius: 0.375rem;
+}
+.badge {
+    font-size: 0.75em;
+}
+</style>
+{% endblock %}
