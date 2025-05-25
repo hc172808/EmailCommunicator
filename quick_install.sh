@@ -15,10 +15,10 @@ if ! grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
     exit 1
 fi
 
-# Check if user has sudo privileges
-if ! sudo -n true 2>/dev/null; then
-    echo "❌ This script requires sudo privileges."
-    echo "Please run: sudo -v"
+# Check if running as root or with sudo
+if [[ $EUID -ne 0 ]]; then
+    echo "❌ This script must be run as root or with sudo."
+    echo "Please run: sudo ./quick_install.sh"
     exit 1
 fi
 
@@ -28,18 +28,18 @@ echo ""
 
 # Update system
 echo "📦 Updating system packages..."
-sudo apt update -qq
+apt update -qq
 
 # Install basic requirements
 echo "🔧 Installing basic requirements..."
-sudo apt install -y python3 python3-pip python3-venv postgresql postgresql-contrib nginx ufw curl
+apt install -y python3 python3-pip python3-venv postgresql postgresql-contrib nginx ufw curl
 
 # Create database
 echo "🗄️  Setting up database..."
 DB_PASSWORD=$(openssl rand -base64 12)
-sudo -u postgres psql -c "CREATE DATABASE emailserver;" 2>/dev/null || echo "Database may already exist"
-sudo -u postgres psql -c "CREATE USER emailserver_user WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || echo "User may already exist"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE emailserver TO emailserver_user;" 2>/dev/null
+su - postgres -c "psql -c \"CREATE DATABASE emailserver;\"" 2>/dev/null || echo "Database may already exist"
+su - postgres -c "psql -c \"CREATE USER emailserver_user WITH PASSWORD '$DB_PASSWORD';\"" 2>/dev/null || echo "User may already exist"
+su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE emailserver TO emailserver_user;\"" 2>/dev/null
 
 # Create environment file
 echo "⚙️  Creating configuration..."
@@ -76,10 +76,10 @@ python3 create_admin.py
 
 # Setup basic firewall
 echo "🛡️  Configuring firewall..."
-sudo ufw --force enable
-sudo ufw allow ssh
-sudo ufw allow 80
-sudo ufw allow 443
+ufw --force enable
+ufw allow ssh
+ufw allow 80
+ufw allow 443
 
 # Create simple start script
 cat > start.sh << 'EOF'
