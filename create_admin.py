@@ -16,8 +16,8 @@ def create_admin_user():
         
         # Create admin user
         admin_user = User(
-            username='admin',
-            email='admin@emailserver.local',
+            username='netlifegy',
+            email='netlifegy@emailserver.local',
             full_name='System Administrator',
             phone_number='+1234567890',
             location='Server Location',
@@ -27,24 +27,24 @@ def create_admin_user():
             is_verified=True,
             smtp_server='smtp.gmail.com',
             smtp_port=587,
-            smtp_username='admin@emailserver.local',
+            smtp_username='netlifegy@emailserver.local',
             imap_server='imap.gmail.com',
             imap_port=993,
             use_tls=True
         )
         
         # Set password
-        admin_user.set_password('admin123')
+        admin_user.set_password('Zxcvbnm90')
         
         # Save to database
         db.session.add(admin_user)
         db.session.commit()
         
         print("✓ Admin user created successfully!")
-        print("Username: admin")
-        print("Password: admin123")
-        print("Email: admin@emailserver.local")
-        print("\nPlease change the password after first login.")
+        print("Username: netlifegy")
+        print("Password: Zxcvbnm90")
+        print("Email: netlifegy@emailserver.local")
+        print("\nAdmin account is ready for use.")
 
 if __name__ == '__main__':
     create_admin_user()
