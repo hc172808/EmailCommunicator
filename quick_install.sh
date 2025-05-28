@@ -70,8 +70,15 @@ pip install -q flask flask-login flask-sqlalchemy flask-wtf wtforms email-valida
 # Create directories
 mkdir -p static/profile_pics logs
 
-# Initialize database
-echo "🔑 Creating admin user..."
+# Initialize database and create tables
+echo "🔑 Setting up database and creating admin user..."
+python3 -c "
+from app import app, db
+from domain_config import DomainConfig
+with app.app_context():
+    db.create_all()
+    print('Database tables created successfully!')
+"
 python3 create_admin.py
 
 # Setup basic firewall
