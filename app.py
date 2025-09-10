@@ -27,7 +27,8 @@ login_manager.login_message = 'Please log in to access this page.'
 login_manager.login_message_category = 'info'
 
 # configure the database, relative to the app instance folder
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///emailserver.db")
+# Temporarily using SQLite to debug database connection issues
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///emailserver.db"
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
