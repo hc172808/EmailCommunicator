@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
-from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken
+from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig
 from email_service import EmailService
 from identity_emails import send_verification_email, send_password_reset_email
 from forms import (LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm,
@@ -22,6 +22,34 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 
 email_service = EmailService()
+
+# ── Maintenance mode middleware ────────────────────────────────────────────────
+
+MAINTENANCE_BYPASS_ROUTES = {'login', 'logout', 'static', 'maintenance_page',
+                              'admin_toggle_maintenance'}
+
+@app.before_request
+def check_maintenance():
+    """Redirect non-admin users to the maintenance page when maintenance mode is on."""
+    # Always allow static files and the maintenance/login routes through
+    if request.endpoint in MAINTENANCE_BYPASS_ROUTES:
+        return None
+    # Check DB flag
+    try:
+        mode = SystemConfig.get('maintenance_mode', 'off')
+    except Exception:
+        return None
+    if mode != 'on':
+        return None
+    # Admins (already logged in) may pass through
+    if current_user.is_authenticated and current_user.is_admin:
+        return None
+    # Everyone else sees the maintenance page
+    features_raw = SystemConfig.get('maintenance_features', '')
+    features = [f.strip() for f in features_raw.split('|') if f.strip()]
+    message = SystemConfig.get('maintenance_message', '')
+    return render_template('maintenance.html', features=features, message=message), 503
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
@@ -248,6 +276,9 @@ def admin_dashboard():
     security_stats = security_manager.get_security_stats()
     
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+    maintenance_on = SystemConfig.get('maintenance_mode', 'off') == 'on'
+    maintenance_message = SystemConfig.get('maintenance_message', '')
+    maintenance_features = SystemConfig.get('maintenance_features', '')
     
     return render_template('admin/dashboard.html',
                          total_users=total_users,
@@ -255,7 +286,10 @@ def admin_dashboard():
                          admin_users=admin_users,
                          total_emails=total_emails,
                          security_stats=security_stats,
-                         recent_users=recent_users)
+                         recent_users=recent_users,
+                         maintenance_on=maintenance_on,
+                         maintenance_message=maintenance_message,
+                         maintenance_features=maintenance_features)
 
 @app.route('/admin/users')
 @login_required
@@ -820,6 +854,39 @@ def email_status():
     """API endpoint to check email sending status"""
     pending_emails = Email.query.filter_by(is_sent=False, is_draft=False).count()
     return jsonify({'pending_emails': pending_emails})
+
+# ── Maintenance Mode Admin Controls ──────────────────────────────────────────
+
+@app.route('/maintenance')
+def maintenance_page():
+    """Direct URL to view the maintenance page (for preview purposes)."""
+    features_raw = SystemConfig.get('maintenance_features', '')
+    features = [f.strip() for f in features_raw.split('|') if f.strip()]
+    message = SystemConfig.get('maintenance_message', '')
+    return render_template('maintenance.html', features=features, message=message)
+
+
+@app.route('/admin/maintenance/toggle', methods=['POST'])
+@login_required
+@security_check
+def admin_toggle_maintenance():
+    """Enable or disable maintenance mode."""
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    action = request.form.get('action')
+    if action == 'enable':
+        message = request.form.get('message', '').strip()
+        features_raw = request.form.get('features', '').strip()
+        SystemConfig.set('maintenance_mode', 'on')
+        SystemConfig.set('maintenance_message', message)
+        SystemConfig.set('maintenance_features', features_raw)
+        flash('Maintenance mode is now ON. Regular users will see the maintenance page.', 'warning')
+    elif action == 'disable':
+        SystemConfig.set('maintenance_mode', 'off')
+        flash('Maintenance mode is now OFF. The site is live for all users.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
 
 # ── Password Reset ────────────────────────────────────────────────────────────
 

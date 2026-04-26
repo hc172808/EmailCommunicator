@@ -97,6 +97,71 @@
     </div>
 </div>
 
+<!-- Maintenance Mode -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card {{ 'border-warning' if maintenance_on else '' }}">
+            <div class="card-header d-flex align-items-center justify-content-between {{ 'bg-warning bg-opacity-10' if maintenance_on else '' }}">
+                <h5 class="mb-0">
+                    <i data-feather="tool" class="me-2"></i>
+                    Maintenance Mode
+                </h5>
+                <span class="badge {{ 'bg-warning text-dark' if maintenance_on else 'bg-success' }} fs-6 px-3 py-2">
+                    {{ 'ON — Site is in maintenance' if maintenance_on else 'OFF — Site is live' }}
+                </span>
+            </div>
+            <div class="card-body">
+                {% if maintenance_on %}
+                <div class="alert alert-warning mb-3">
+                    <i data-feather="alert-triangle" class="me-2"></i>
+                    <strong>Maintenance mode is active.</strong> Regular users see the maintenance page. You (admin) can still browse normally.
+                </div>
+                <form method="POST" action="{{ url_for('admin_toggle_maintenance') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="disable">
+                    <button type="submit" class="btn btn-success">
+                        <i data-feather="check-circle" class="me-2"></i>
+                        Bring Site Back Online
+                    </button>
+                    <a href="{{ url_for('maintenance_page') }}" target="_blank" class="btn btn-outline-secondary ms-2">
+                        <i data-feather="eye" class="me-2"></i>
+                        Preview Page
+                    </a>
+                </form>
+                {% else %}
+                <p class="text-muted mb-3">Enable maintenance mode before deploying updates. Users will see a friendly upgrade notice instead of errors.</p>
+                <form method="POST" action="{{ url_for('admin_toggle_maintenance') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="enable">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Message to users <small class="text-muted">(optional)</small></label>
+                            <input type="text" name="message" class="form-control"
+                                   placeholder="e.g. Back online by 3pm UTC"
+                                   value="{{ maintenance_message }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">What's coming <small class="text-muted">(separate with |)</small></label>
+                            <input type="text" name="features" class="form-control"
+                                   placeholder="e.g. New dashboard | Bug fixes | Faster search"
+                                   value="{{ maintenance_features }}">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-warning text-dark">
+                        <i data-feather="tool" class="me-2"></i>
+                        Enable Maintenance Mode
+                    </button>
+                    <a href="{{ url_for('maintenance_page') }}" target="_blank" class="btn btn-outline-secondary ms-2">
+                        <i data-feather="eye" class="me-2"></i>
+                        Preview Page
+                    </a>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Users -->
 <div class="row">
     <div class="col-12">
