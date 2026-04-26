@@ -30,6 +30,14 @@ Preferred communication style: Simple, everyday language.
 - **Email Composition**: Rich text and HTML email support with draft functionality
 - **Email Organization**: Inbox, sent, drafts, and custom folder management
 
+## Identity System
+- **Email Verification**: Token-based email verification on registration with resend capability
+- **Password Reset**: Secure forgot-password / reset-password flow via time-limited tokens
+- **Two-Factor Authentication (2FA)**: TOTP-based 2FA using pyotp with QR code setup and 8 one-time backup codes
+- **API Tokens**: Long-lived bearer tokens stored in DB for programmatic access; users can create, view, and revoke tokens from their profile
+- **API Endpoint `/api/user/me`**: Returns authenticated user profile; supports both JWT and API token auth
+- **Login 2FA gate**: After password verification, users with 2FA enabled are redirected to a verification step before session is established
+
 ## Security Framework
 - **IP Protection**: Automatic IP banning based on failed login attempts
 - **Rate Limiting**: Request throttling to prevent abuse

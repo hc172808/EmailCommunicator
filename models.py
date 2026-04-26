@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import Text, DateTime, Boolean, String, Integer
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+import secrets
 
 class User(UserMixin, db.Model):
     """User model for authentication and profile management"""
@@ -17,7 +18,7 @@ class User(UserMixin, db.Model):
     full_name = db.Column(String(255), nullable=False)
     phone_number = db.Column(String(20))
     location = db.Column(String(255))
-    profile_photo = db.Column(String(255))  # File path or URL
+    profile_photo = db.Column(String(255))
     bio = db.Column(Text)
     
     # User status and role
@@ -39,29 +40,32 @@ class User(UserMixin, db.Model):
     imap_port = db.Column(Integer)
     use_tls = db.Column(Boolean, default=True)
     
+    # Two-factor authentication
+    totp_secret = db.Column(String(64))
+    totp_enabled = db.Column(Boolean, default=False)
+    totp_backup_codes = db.Column(Text)
+    
     # Relationships
     emails_sent = db.relationship('Email', foreign_keys='Email.sender_id', backref='sender_user', lazy='dynamic')
     emails_received = db.relationship('Email', foreign_keys='Email.recipient_id', backref='recipient_user', lazy='dynamic')
+    api_tokens = db.relationship('APIToken', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     
     def set_password(self, password):
-        """Set password hash"""
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
-        """Check if provided password matches hash"""
         return check_password_hash(self.password_hash, password)
     
     def get_email_address(self):
-        """Get the primary email address for this user"""
         return self.smtp_username or self.email
     
     @property
     def is_active(self):
-        """Override UserMixin property to use our 'active' field"""
         return self.active
     
     def __repr__(self):
         return f'<User {self.username}>'
+
 
 class Email(db.Model):
     """Model for storing email messages"""
@@ -88,7 +92,6 @@ class Email(db.Model):
         return f'<Email {self.id}: {self.subject}>'
     
     def to_dict(self):
-        """Convert email to dictionary for JSON serialization"""
         return {
             'id': self.id,
             'sender': self.sender,
@@ -105,6 +108,7 @@ class Email(db.Model):
             'in_reply_to': self.in_reply_to,
             'error_message': self.error_message
         }
+
 
 class EmailConfig(db.Model):
     """Model for storing email server configuration"""
@@ -125,3 +129,69 @@ class EmailConfig(db.Model):
     
     def __repr__(self):
         return f'<EmailConfig {self.name}>'
+
+
+class PasswordResetToken(db.Model):
+    """Tokens for password reset flow"""
+    __tablename__ = 'password_reset_tokens'
+    
+    id = db.Column(Integer, primary_key=True)
+    user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(String(128), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(64))
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    expires_at = db.Column(DateTime, nullable=False)
+    used = db.Column(Boolean, default=False)
+    
+    user = db.relationship('User', backref=db.backref('reset_tokens', lazy='dynamic'))
+    
+    def is_valid(self):
+        return not self.used and datetime.utcnow() < self.expires_at
+    
+    def __repr__(self):
+        return f'<PasswordResetToken user_id={self.user_id}>'
+
+
+class EmailVerificationToken(db.Model):
+    """Tokens for email address verification"""
+    __tablename__ = 'email_verification_tokens'
+    
+    id = db.Column(Integer, primary_key=True)
+    user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(String(128), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(64))
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    expires_at = db.Column(DateTime, nullable=False)
+    used = db.Column(Boolean, default=False)
+    
+    user = db.relationship('User', backref=db.backref('verification_tokens', lazy='dynamic'))
+    
+    def is_valid(self):
+        return not self.used and datetime.utcnow() < self.expires_at
+    
+    def __repr__(self):
+        return f'<EmailVerificationToken user_id={self.user_id}>'
+
+
+class APIToken(db.Model):
+    """Long-lived API tokens for programmatic access"""
+    __tablename__ = 'api_tokens'
+    
+    id = db.Column(Integer, primary_key=True)
+    user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    name = db.Column(String(100), nullable=False)
+    token = db.Column(String(128), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(64))
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    last_used_at = db.Column(DateTime)
+    is_active = db.Column(Boolean, default=True)
+    
+    def __repr__(self):
+        return f'<APIToken {self.name} user_id={self.user_id}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'token_preview': self.token[:8] + '...' + self.token[-4:],
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
+            'is_active': self.is_active
+        }

@@ -1,15 +1,23 @@
-from flask import render_template, request, redirect, url_for, flash, jsonify, current_app
+from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
-from models import Email, EmailConfig, User
+from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken
 from email_service import EmailService
-from forms import LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm
+from identity_emails import send_verification_email, send_password_reset_email
+from forms import (LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm,
+                   ForgotPasswordForm, ResetPasswordForm, TwoFactorSetupForm, TwoFactorVerifyForm, APITokenForm)
 from security import security_manager, security_check, login_security_check, SecurityBan, SecurityLog
 from backup_service import backup_service
 from domain_config import domain_manager, DomainConfig
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import os
+import io
+import base64
+import secrets
+import pyotp
+import qrcode
+import qrcode.image.pil
 from werkzeug.utils import secure_filename
 from PIL import Image
 
@@ -53,6 +61,12 @@ def login():
         if user and user.check_password(form.password.data):
             # Record successful login
             security_manager.record_successful_login(user)
+            
+            # Check for 2FA
+            if user.totp_enabled:
+                session['pending_2fa_user_id'] = user.id
+                session['pending_2fa_remember'] = form.remember_me.data
+                return redirect(url_for('two_factor_verify'))
             
             login_user(user, remember=form.remember_me.data)
             user.last_login = datetime.utcnow()
@@ -106,9 +120,21 @@ def register():
             user.set_password(form.password.data)
             
             db.session.add(user)
+            db.session.flush()
+            
+            # Create verification token
+            token = EmailVerificationToken(
+                user_id=user.id,
+                expires_at=datetime.utcnow() + timedelta(hours=24)
+            )
+            db.session.add(token)
             db.session.commit()
             
-            flash('Registration successful! You can now log in.', 'success')
+            # Send verification email
+            base_url = request.host_url.rstrip('/')
+            send_verification_email(user, token.token, base_url)
+            
+            flash('Registration successful! Check your email to verify your account.', 'success')
             return redirect(url_for('login'))
             
         except Exception as e:
@@ -794,6 +820,249 @@ def email_status():
     """API endpoint to check email sending status"""
     pending_emails = Email.query.filter_by(is_sent=False, is_draft=False).count()
     return jsonify({'pending_emails': pending_emails})
+
+# ── Password Reset ────────────────────────────────────────────────────────────
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = ForgotPasswordForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user:
+            # Invalidate old tokens
+            PasswordResetToken.query.filter_by(user_id=user.id, used=False).update({'used': True})
+            token = PasswordResetToken(
+                user_id=user.id,
+                expires_at=datetime.utcnow() + timedelta(hours=1)
+            )
+            db.session.add(token)
+            db.session.commit()
+            base_url = request.host_url.rstrip('/')
+            send_password_reset_email(user, token.token, base_url)
+        # Always show success to prevent email enumeration
+        flash('If that email exists, a reset link has been sent.', 'info')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html', form=form)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    record = PasswordResetToken.query.filter_by(token=token).first()
+    if not record or not record.is_valid():
+        flash('This reset link is invalid or has expired.', 'error')
+        return redirect(url_for('forgot_password'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        record.user.set_password(form.password.data)
+        record.used = True
+        db.session.commit()
+        flash('Your password has been reset. Please log in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('reset_password.html', form=form, token=token)
+
+
+# ── Email Verification ────────────────────────────────────────────────────────
+
+@app.route('/verify-email/<token>')
+def verify_email(token):
+    record = EmailVerificationToken.query.filter_by(token=token).first()
+    if not record or not record.is_valid():
+        return render_template('verify_email.html', success=False, error='This link is invalid or has expired.')
+    record.user.is_verified = True
+    record.used = True
+    db.session.commit()
+    return render_template('verify_email.html', success=True)
+
+
+@app.route('/resend-verification', methods=['POST'])
+@login_required
+def resend_verification():
+    if current_user.is_verified:
+        flash('Your email is already verified.', 'info')
+        return redirect(url_for('profile'))
+    # Invalidate old tokens
+    EmailVerificationToken.query.filter_by(user_id=current_user.id, used=False).update({'used': True})
+    token = EmailVerificationToken(
+        user_id=current_user.id,
+        expires_at=datetime.utcnow() + timedelta(hours=24)
+    )
+    db.session.add(token)
+    db.session.commit()
+    base_url = request.host_url.rstrip('/')
+    send_verification_email(current_user, token.token, base_url)
+    flash('Verification email sent! Check your inbox.', 'success')
+    return redirect(url_for('profile'))
+
+
+# ── Two-Factor Authentication ─────────────────────────────────────────────────
+
+@app.route('/profile/2fa/setup', methods=['GET', 'POST'])
+@login_required
+def two_factor_setup():
+    if current_user.totp_enabled:
+        flash('2FA is already enabled.', 'info')
+        return redirect(url_for('profile'))
+
+    # Generate or reuse a pending secret stored in session
+    if 'pending_totp_secret' not in session:
+        session['pending_totp_secret'] = pyotp.random_base32()
+    secret = session['pending_totp_secret']
+
+    # Build TOTP URI and QR code
+    totp = pyotp.TOTP(secret)
+    uri = totp.provisioning_uri(name=current_user.email, issuer_name='Email Server')
+    img = qrcode.make(uri)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+
+    form = TwoFactorSetupForm()
+    if form.validate_on_submit():
+        if totp.verify(form.code.data, valid_window=1):
+            # Generate backup codes
+            backup_codes = [secrets.token_hex(4).upper() for _ in range(8)]
+            current_user.totp_secret = secret
+            current_user.totp_enabled = True
+            current_user.totp_backup_codes = ','.join(backup_codes)
+            db.session.commit()
+            session.pop('pending_totp_secret', None)
+            flash('Two-factor authentication is now enabled! Save your backup codes: ' + ', '.join(backup_codes), 'success')
+            return redirect(url_for('profile'))
+        else:
+            flash('Invalid code. Please try again.', 'error')
+
+    return render_template('2fa_setup.html', form=form, secret=secret, qr_code=qr_b64)
+
+
+@app.route('/profile/2fa/disable', methods=['POST'])
+@login_required
+def two_factor_disable():
+    current_user.totp_enabled = False
+    current_user.totp_secret = None
+    current_user.totp_backup_codes = None
+    db.session.commit()
+    flash('Two-factor authentication has been disabled.', 'info')
+    return redirect(url_for('profile'))
+
+
+@app.route('/auth/2fa/verify', methods=['GET', 'POST'])
+def two_factor_verify():
+    user_id = session.get('pending_2fa_user_id')
+    if not user_id:
+        return redirect(url_for('login'))
+    user = User.query.get(user_id)
+    if not user:
+        session.pop('pending_2fa_user_id', None)
+        return redirect(url_for('login'))
+
+    form = TwoFactorVerifyForm()
+    if form.validate_on_submit():
+        code = form.code.data.strip()
+        totp = pyotp.TOTP(user.totp_secret)
+        valid = totp.verify(code, valid_window=1)
+
+        # Check backup codes
+        if not valid and user.totp_backup_codes:
+            backup_codes = user.totp_backup_codes.split(',')
+            if code.upper() in backup_codes:
+                valid = True
+                backup_codes.remove(code.upper())
+                user.totp_backup_codes = ','.join(backup_codes)
+                db.session.commit()
+
+        if valid:
+            remember = session.pop('pending_2fa_remember', False)
+            session.pop('pending_2fa_user_id', None)
+            login_user(user, remember=remember)
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+            flash(f'Welcome back, {user.full_name}!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Invalid code. Please try again.', 'error')
+
+    return render_template('2fa_verify.html', form=form)
+
+
+# ── API Token Management ──────────────────────────────────────────────────────
+
+@app.route('/profile/api-tokens')
+@login_required
+def api_tokens():
+    form = APITokenForm()
+    tokens = APIToken.query.filter_by(user_id=current_user.id).order_by(APIToken.created_at.desc()).all()
+    new_token = session.pop('new_api_token', None)
+    return render_template('api_tokens.html', form=form, tokens=tokens, new_token=new_token)
+
+
+@app.route('/profile/api-tokens/create', methods=['POST'])
+@login_required
+def create_api_token():
+    form = APITokenForm()
+    if form.validate_on_submit():
+        token = APIToken(user_id=current_user.id, name=form.name.data)
+        db.session.add(token)
+        db.session.commit()
+        session['new_api_token'] = token.token
+        flash(f'Token "{token.name}" created. Copy it now — it won\'t be shown again.', 'success')
+    return redirect(url_for('api_tokens'))
+
+
+@app.route('/profile/api-tokens/<int:token_id>/revoke', methods=['POST'])
+@login_required
+def revoke_api_token(token_id):
+    token = APIToken.query.filter_by(id=token_id, user_id=current_user.id).first_or_404()
+    token.is_active = False
+    db.session.commit()
+    flash(f'Token "{token.name}" has been revoked.', 'info')
+    return redirect(url_for('api_tokens'))
+
+
+# ── Updated API auth: support both JWT and long-lived API tokens ──────────────
+
+def _get_api_user():
+    """Resolve a user from Authorization header — supports API tokens and JWTs."""
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer '):
+        return None
+    raw = auth[7:]
+    # Try API token first
+    token_record = APIToken.query.filter_by(token=raw, is_active=True).first()
+    if token_record:
+        token_record.last_used_at = datetime.utcnow()
+        db.session.commit()
+        return token_record.user
+    # Fall back to JWT
+    try:
+        import jwt as pyjwt
+        payload = pyjwt.decode(raw, os.environ.get('SESSION_SECRET', 'secret'), algorithms=['HS256'])
+        return User.query.get(payload['user_id'])
+    except Exception:
+        return None
+
+
+@app.route('/api/user/me')
+def api_user_me():
+    """Return the authenticated user's profile."""
+    user = _get_api_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'full_name': user.full_name,
+        'is_verified': user.is_verified,
+        'is_admin': user.is_admin,
+        'totp_enabled': user.totp_enabled,
+        'created_at': user.created_at.isoformat() if user.created_at else None,
+        'last_login': user.last_login.isoformat() if user.last_login else None,
+    })
+
 
 @app.errorhandler(404)
 def not_found_error(error):

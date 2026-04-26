@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Two-Factor Authentication - Email Server{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+        <div class="card">
+            <div class="card-header text-center">
+                <h4 class="mb-0">
+                    <i data-feather="shield" class="me-2"></i>
+                    Two-Factor Authentication
+                </h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Enter the 6-digit code from your authenticator app, or a backup code.</p>
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.code.label(class="form-label") }}
+                        {{ form.code(class="form-control" + (" is-invalid" if form.code.errors else ""), placeholder="123456", autocomplete="one-time-code", inputmode="numeric", autofocus=true) }}
+                        {% if form.code.errors %}
+                            <div class="invalid-feedback">{% for e in form.code.errors %}{{ e }}{% endfor %}</div>
+                        {% endif %}
+                    </div>
+                    <div class="d-grid mb-3">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+                <div class="text-center">
+                    <a href="{{ url_for('logout') }}" class="text-muted small">
+                        <i data-feather="arrow-left" class="me-1"></i> Back to login
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

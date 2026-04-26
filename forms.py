@@ -36,8 +36,6 @@ class RegistrationForm(FlaskForm):
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Images only!')
     ])
-    
-    # Email server configuration
     smtp_server = StringField('SMTP Server', validators=[Optional()])
     smtp_port = StringField('SMTP Port', validators=[Optional()])
     smtp_username = StringField('SMTP Username', validators=[Optional()])
@@ -45,7 +43,6 @@ class RegistrationForm(FlaskForm):
     imap_server = StringField('IMAP Server', validators=[Optional()])
     imap_port = StringField('IMAP Port', validators=[Optional()])
     use_tls = BooleanField('Use TLS/SSL', default=True)
-    
     password = PasswordField('Password', validators=[
         DataRequired(),
         Length(min=6, message='Password must be at least 6 characters long')
@@ -87,8 +84,6 @@ class ProfileForm(FlaskForm):
         Optional(),
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Images only!')
     ])
-    
-    # Email server configuration
     smtp_server = StringField('SMTP Server', validators=[Optional()])
     smtp_port = StringField('SMTP Port', validators=[Optional()])
     smtp_username = StringField('SMTP Username', validators=[Optional()])
@@ -96,7 +91,6 @@ class ProfileForm(FlaskForm):
     imap_server = StringField('IMAP Server', validators=[Optional()])
     imap_port = StringField('IMAP Port', validators=[Optional()])
     use_tls = BooleanField('Use TLS/SSL')
-    
     submit = SubmitField('Update Profile')
 
 class ChangePasswordForm(FlaskForm):
@@ -119,3 +113,39 @@ class AdminUserForm(FlaskForm):
     is_admin = BooleanField('Admin')
     is_verified = BooleanField('Verified')
     submit = SubmitField('Update User')
+
+class ForgotPasswordForm(FlaskForm):
+    email = StringField('Email Address', validators=[DataRequired(), Email()])
+    submit = SubmitField('Send Reset Link')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[
+        DataRequired(),
+        Length(min=6, message='Password must be at least 6 characters long')
+    ])
+    password2 = PasswordField('Confirm New Password', validators=[
+        DataRequired(),
+        EqualTo('password', message='Passwords must match')
+    ])
+    submit = SubmitField('Reset Password')
+
+class TwoFactorSetupForm(FlaskForm):
+    code = StringField('Authenticator Code', validators=[
+        DataRequired(),
+        Length(min=6, max=6, message='Code must be exactly 6 digits')
+    ])
+    submit = SubmitField('Enable 2FA')
+
+class TwoFactorVerifyForm(FlaskForm):
+    code = StringField('Authentication Code', validators=[
+        DataRequired(),
+        Length(min=6, max=8, message='Enter your 6-digit code or 8-character backup code')
+    ])
+    submit = SubmitField('Verify')
+
+class APITokenForm(FlaskForm):
+    name = StringField('Token Name', validators=[
+        DataRequired(),
+        Length(min=1, max=100, message='Name must be between 1 and 100 characters')
+    ])
+    submit = SubmitField('Generate Token')

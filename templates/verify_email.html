@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Verify Email - Email Server{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card text-center">
+            <div class="card-body py-5">
+                {% if success %}
+                    <i data-feather="check-circle" style="width:64px;height:64px;" class="text-success mb-3"></i>
+                    <h3 class="mb-2">Email Verified!</h3>
+                    <p class="text-muted mb-4">Your email address has been verified successfully.</p>
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">Go to Login</a>
+                {% else %}
+                    <i data-feather="x-circle" style="width:64px;height:64px;" class="text-danger mb-3"></i>
+                    <h3 class="mb-2">Verification Failed</h3>
+                    <p class="text-muted mb-4">{{ error or "This verification link is invalid or has expired." }}</p>
+                    {% if current_user.is_authenticated %}
+                    <form method="POST" action="{{ url_for('resend_verification') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-primary">Resend Verification Email</button>
+                    </form>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-outline-secondary">Back to Login</a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

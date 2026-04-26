@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}API Tokens - Email Server{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="key" class="me-2"></i>
+                    API Tokens
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">API tokens allow external applications to authenticate as you. Keep them secret — treat them like passwords.</p>
+
+                {% if new_token %}
+                <div class="alert alert-success">
+                    <strong><i data-feather="check-circle" class="me-2"></i>Token created!</strong> Copy it now — it won't be shown again.
+                    <div class="mt-2">
+                        <code class="d-block p-2 bg-dark rounded user-select-all" style="word-break:break-all;">{{ new_token }}</code>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if tokens %}
+                <table class="table table-dark table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Token</th>
+                            <th>Created</th>
+                            <th>Last Used</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for token in tokens %}
+                        <tr>
+                            <td>{{ token.name }}</td>
+                            <td><code>{{ token.token[:8] }}...{{ token.token[-4:] }}</code></td>
+                            <td><small>{{ token.created_at.strftime('%Y-%m-%d') }}</small></td>
+                            <td><small>{{ token.last_used_at.strftime('%Y-%m-%d') if token.last_used_at else 'Never' }}</small></td>
+                            <td>
+                                {% if token.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Revoked</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if token.is_active %}
+                                <form method="POST" action="{{ url_for('revoke_api_token', token_id=token.id) }}" onsubmit="return confirm('Revoke this token?')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i data-feather="key" style="width:48px;height:48px;" class="mb-3 d-block mx-auto"></i>
+                    <p>No API tokens yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="plus" class="me-2"></i>
+                    Generate New Token
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('create_api_token') }}">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="e.g. My Mobile App") }}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback">{% for e in form.name.errors %}{{ e }}{% endfor %}</div>
+                        {% endif %}
+                    </div>
+                    <div class="d-grid">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="info" class="me-2"></i>
+                    How to Use
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">Pass your token in the <code>Authorization</code> header:</p>
+                <code class="d-block p-2 bg-dark rounded small">Authorization: Bearer YOUR_TOKEN</code>
+                <hr>
+                <p class="small text-muted mb-1">Available endpoints:</p>
+                <ul class="small text-muted mb-0">
+                    <li><code>GET /api/emails</code></li>
+                    <li><code>POST /api/emails/send</code></li>
+                    <li><code>GET /api/user/me</code></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
