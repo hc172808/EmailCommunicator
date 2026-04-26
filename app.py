@@ -5,6 +5,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 
 # Configure logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -46,6 +47,9 @@ app.config.update(
 
 # initialize the app with the extension, flask-sqlalchemy >= 3.0.x
 db.init_app(app)
+
+# Enable CSRF protection (also registers csrf_token() as a Jinja2 global)
+csrf = CSRFProtect(app)
 
 @login_manager.user_loader
 def load_user(user_id):

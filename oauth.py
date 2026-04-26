@@ -12,8 +12,8 @@ Endpoints:
 """
 
 from flask import request, redirect, url_for, render_template, jsonify, session, current_app
-from flask_login import current_user, login_required
-from app import app, db
+from flask_login import current_user
+from app import app, db, csrf
 from models import OAuthApp, OAuthAuthorizationCode, OAuthAccessToken, User
 from datetime import datetime, timedelta
 import logging
@@ -102,6 +102,7 @@ def oauth_authorize():
 # ── Token endpoint ────────────────────────────────────────────────────────────
 
 @app.route('/oauth/token', methods=['POST'])
+@csrf.exempt
 def oauth_token():
     grant_type    = request.form.get('grant_type', '')
     code_val      = request.form.get('code', '')
@@ -144,6 +145,7 @@ def oauth_token():
 # ── UserInfo endpoint ─────────────────────────────────────────────────────────
 
 @app.route('/oauth/userinfo')
+@csrf.exempt
 def oauth_userinfo():
     user = _bearer_user()
     if not user:
@@ -164,6 +166,7 @@ def oauth_userinfo():
 # ── Discovery document ────────────────────────────────────────────────────────
 
 @app.route('/oauth/.well-known/openid-configuration')
+@csrf.exempt
 def oauth_discovery():
     base = _get_base_url()
     return jsonify({
@@ -181,6 +184,7 @@ def oauth_discovery():
 # ── Embeddable widget script ──────────────────────────────────────────────────
 
 @app.route('/oauth/widget.js')
+@csrf.exempt
 def oauth_widget():
     client_id = request.args.get('client_id', '')
     redirect_uri = request.args.get('redirect_uri', '')

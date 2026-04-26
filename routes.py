@@ -1,6 +1,6 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
-from app import app, db
+from app import app, db, csrf
 from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig
 from email_service import EmailService
 from identity_emails import send_verification_email, send_password_reset_email
@@ -576,6 +576,7 @@ def admin_configure_ssl(domain_id):
 
 # API routes for mobile app
 @app.route('/api/auth/login', methods=['POST'])
+@csrf.exempt
 def api_login():
     """API login for mobile app"""
     try:
@@ -649,6 +650,7 @@ def api_get_emails():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/emails/send', methods=['POST'])
+@csrf.exempt
 def api_send_email():
     """Send email via API for mobile app"""
     try:
@@ -852,6 +854,7 @@ def send_draft(email_id):
     return redirect(url_for('sent'))
 
 @app.route('/api/emails/status')
+@csrf.exempt
 def email_status():
     """API endpoint to check email sending status"""
     pending_emails = Email.query.filter_by(is_sent=False, is_draft=False).count()
@@ -1115,6 +1118,7 @@ def _get_api_user():
 
 
 @app.route('/api/user/me')
+@csrf.exempt
 def api_user_me():
     """Return the authenticated user's profile."""
     user = _get_api_user()
