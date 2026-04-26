@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Authorization Error – Email Server{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card text-center">
+      <div class="card-body py-5">
+        <i data-feather="alert-circle" style="width:64px;height:64px;" class="text-danger mb-3"></i>
+        <h3 class="mb-2">{{ error }}</h3>
+        <p class="text-muted mb-4">{{ description }}</p>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Go Home</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

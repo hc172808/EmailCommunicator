@@ -200,6 +200,83 @@ class SystemConfig(db.Model):
         return f'<SystemConfig {self.key}={self.value}>'
 
 
+class OAuthApp(db.Model):
+    """A registered third-party client application that uses this server for SSO."""
+    __tablename__ = 'oauth_apps'
+
+    id = db.Column(Integer, primary_key=True)
+    name = db.Column(String(100), nullable=False)
+    description = db.Column(Text)
+    website_url = db.Column(String(500))
+    logo_url = db.Column(String(500))
+    client_id = db.Column(String(64), unique=True, nullable=False,
+                          default=lambda: secrets.token_urlsafe(32))
+    client_secret = db.Column(String(128), nullable=False,
+                              default=lambda: secrets.token_urlsafe(64))
+    redirect_uris = db.Column(Text, nullable=False)  # newline-separated list
+    is_active = db.Column(Boolean, default=True)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    created_by = db.Column(Integer, db.ForeignKey('users.id'))
+
+    auth_codes = db.relationship('OAuthAuthorizationCode', backref='app', lazy='dynamic',
+                                 cascade='all, delete-orphan')
+    access_tokens = db.relationship('OAuthAccessToken', backref='app', lazy='dynamic',
+                                    cascade='all, delete-orphan')
+
+    def allowed_redirect(self, uri):
+        allowed = [u.strip() for u in (self.redirect_uris or '').splitlines() if u.strip()]
+        return uri in allowed
+
+    def __repr__(self):
+        return f'<OAuthApp {self.name}>'
+
+
+class OAuthAuthorizationCode(db.Model):
+    """Short-lived code issued after user approves an OAuth authorization request."""
+    __tablename__ = 'oauth_authorization_codes'
+
+    id = db.Column(Integer, primary_key=True)
+    code = db.Column(String(128), unique=True, nullable=False,
+                     default=lambda: secrets.token_urlsafe(64))
+    app_id = db.Column(Integer, db.ForeignKey('oauth_apps.id'), nullable=False)
+    user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    redirect_uri = db.Column(String(500), nullable=False)
+    scope = db.Column(String(200), default='profile')
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    expires_at = db.Column(DateTime, nullable=False)
+    used = db.Column(Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('oauth_codes', lazy='dynamic'))
+
+    def is_valid(self):
+        return not self.used and datetime.utcnow() < self.expires_at
+
+    def __repr__(self):
+        return f'<OAuthAuthorizationCode app={self.app_id} user={self.user_id}>'
+
+
+class OAuthAccessToken(db.Model):
+    """Access token issued to a client app after code exchange."""
+    __tablename__ = 'oauth_access_tokens'
+
+    id = db.Column(Integer, primary_key=True)
+    token = db.Column(String(128), unique=True, nullable=False,
+                      default=lambda: secrets.token_urlsafe(64))
+    app_id = db.Column(Integer, db.ForeignKey('oauth_apps.id'), nullable=False)
+    user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    scope = db.Column(String(200), default='profile')
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    expires_at = db.Column(DateTime, nullable=False)
+
+    user = db.relationship('User', backref=db.backref('oauth_tokens', lazy='dynamic'))
+
+    def is_valid(self):
+        return datetime.utcnow() < self.expires_at
+
+    def __repr__(self):
+        return f'<OAuthAccessToken app={self.app_id} user={self.user_id}>'
+
+
 class APIToken(db.Model):
     """Long-lived API tokens for programmatic access"""
     __tablename__ = 'api_tokens'

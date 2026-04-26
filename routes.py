@@ -26,7 +26,9 @@ email_service = EmailService()
 # ── Maintenance mode middleware ────────────────────────────────────────────────
 
 MAINTENANCE_BYPASS_ROUTES = {'login', 'logout', 'static', 'maintenance_page',
-                              'admin_toggle_maintenance'}
+                              'admin_toggle_maintenance',
+                              'oauth_authorize', 'oauth_token', 'oauth_userinfo',
+                              'oauth_discovery', 'oauth_widget'}
 
 @app.before_request
 def check_maintenance():
@@ -100,8 +102,8 @@ def login():
             user.last_login = datetime.utcnow()
             db.session.commit()
             
-            next_page = request.args.get('next')
-            if not next_page or not next_page.startswith('/'):
+            next_page = session.pop('oauth_next', None) or request.args.get('next')
+            if not next_page or (not next_page.startswith('/') and 'oauth/authorize' not in next_page):
                 next_page = url_for('index')
             
             flash(f'Welcome back, {user.full_name}!', 'success')
@@ -1129,6 +1131,96 @@ def api_user_me():
         'created_at': user.created_at.isoformat() if user.created_at else None,
         'last_login': user.last_login.isoformat() if user.last_login else None,
     })
+
+
+# ── OAuth / SSO Admin Routes ──────────────────────────────────────────────────
+
+@app.route('/admin/oauth-apps')
+@login_required
+@security_check
+def admin_oauth_apps():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    apps = OAuthApp.query.order_by(OAuthApp.created_at.desc()).all()
+    base_url = request.host_url.rstrip('/')
+    return render_template('admin/oauth_apps.html', apps=apps, base_url=base_url)
+
+
+@app.route('/admin/oauth-apps/create', methods=['POST'])
+@login_required
+@security_check
+def admin_create_oauth_app():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    name = request.form.get('name', '').strip()
+    redirect_uris = request.form.get('redirect_uris', '').strip()
+    if not name or not redirect_uris:
+        flash('App name and at least one redirect URI are required.', 'error')
+        return redirect(url_for('admin_oauth_apps'))
+    app_record = OAuthApp(
+        name=name,
+        description=request.form.get('description', '').strip(),
+        website_url=request.form.get('website_url', '').strip(),
+        logo_url=request.form.get('logo_url', '').strip(),
+        redirect_uris=redirect_uris,
+        created_by=current_user.id
+    )
+    db.session.add(app_record)
+    db.session.commit()
+    flash(f'"{name}" registered successfully.', 'success')
+    return redirect(url_for('admin_oauth_apps'))
+
+
+@app.route('/admin/oauth-apps/<int:app_id>/regenerate-secret', methods=['POST'])
+@login_required
+@security_check
+def admin_regenerate_oauth_secret(app_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    import secrets as _secrets
+    app_record = OAuthApp.query.get_or_404(app_id)
+    app_record.client_secret = _secrets.token_urlsafe(64)
+    db.session.commit()
+    flash('Client secret regenerated. Update your integration immediately.', 'warning')
+    return redirect(url_for('admin_oauth_apps'))
+
+
+@app.route('/admin/oauth-apps/<int:app_id>/toggle', methods=['POST'])
+@login_required
+@security_check
+def admin_toggle_oauth_app(app_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    app_record = OAuthApp.query.get_or_404(app_id)
+    app_record.is_active = not app_record.is_active
+    db.session.commit()
+    status = 'activated' if app_record.is_active else 'deactivated'
+    flash(f'"{app_record.name}" has been {status}.', 'success')
+    return redirect(url_for('admin_oauth_apps'))
+
+
+@app.route('/admin/oauth-apps/<int:app_id>/delete', methods=['POST'])
+@login_required
+@security_check
+def admin_delete_oauth_app(app_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    app_record = OAuthApp.query.get_or_404(app_id)
+    name = app_record.name
+    db.session.delete(app_record)
+    db.session.commit()
+    flash(f'"{name}" has been deleted.', 'success')
+    return redirect(url_for('admin_oauth_apps'))
 
 
 @app.errorhandler(404)

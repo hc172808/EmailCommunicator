@@ -16,8 +16,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Application Structure
 - **MVC Pattern**: Separation of models (database), views (templates), and controllers (routes)
-- **Modular Design**: Separate modules for email services, security, backup, and domain management
+- **Modular Design**: Separate modules for email services, security, backup, domain management, and OAuth SSO
 - **Security-First Architecture**: Built-in fail2ban-like protection, rate limiting, and intrusion detection
+- **OAuth 2.0 SSO Provider**: Full Authorization Code flow (`oauth.py`) with embeddable widget, `/oauth/authorize`, `/oauth/token`, `/oauth/userinfo`, discovery document
 
 ## Database Models
 - **User Management**: Comprehensive user profiles with email server configurations

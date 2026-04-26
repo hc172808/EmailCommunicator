@@ -76,6 +76,10 @@
                             <li><a class="dropdown-item" href="{{ url_for('admin_security') }}">
                                 <i data-feather="shield" class="me-2"></i>Security
                             </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_oauth_apps') }}">
+                                <i data-feather="link" class="me-2"></i>SSO Apps
+                            </a></li>
                         </ul>
                     </li>
                     {% endif %}

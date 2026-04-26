@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Authorize {{ oauth_app.name }} – Email Server{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card">
+      <div class="card-header text-center py-4">
+        {% if oauth_app.logo_url %}
+          <img src="{{ oauth_app.logo_url }}" alt="{{ oauth_app.name }}" height="48" class="mb-3 d-block mx-auto rounded">
+        {% else %}
+          <div class="avatar-circle bg-primary text-white mx-auto mb-3" style="width:64px;height:64px;font-size:1.8rem;">
+            {{ oauth_app.name[0].upper() }}
+          </div>
+        {% endif %}
+        <h4 class="mb-0">{{ oauth_app.name }}</h4>
+        {% if oauth_app.website_url %}
+          <small class="text-muted">{{ oauth_app.website_url }}</small>
+        {% endif %}
+      </div>
+
+      <div class="card-body">
+        <p class="text-center mb-1">
+          <strong>{{ oauth_app.name }}</strong> wants to access your account.
+        </p>
+        {% if oauth_app.description %}
+          <p class="text-muted text-center small mb-3">{{ oauth_app.description }}</p>
+        {% endif %}
+
+        <div class="card bg-secondary bg-opacity-10 mb-4">
+          <div class="card-body py-3">
+            <p class="mb-2 fw-semibold small text-muted text-uppercase" style="letter-spacing:.05em;">This will allow the app to:</p>
+            <ul class="list-unstyled mb-0">
+              <li class="mb-1"><i data-feather="check" class="text-success me-2" style="width:15px;height:15px;"></i>Read your name and username</li>
+              <li class="mb-1"><i data-feather="check" class="text-success me-2" style="width:15px;height:15px;"></i>Read your email address</li>
+              <li class="mb-1"><i data-feather="check" class="text-success me-2" style="width:15px;height:15px;"></i>Know if your email is verified</li>
+              <li><i data-feather="x" class="text-danger me-2" style="width:15px;height:15px;"></i>Cannot change your password or data</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center mb-4">
+          {% if current_user.profile_photo %}
+            <img src="{{ url_for('static', filename='profile_pics/' + current_user.profile_photo) }}"
+                 class="rounded-circle me-3" width="40" height="40" alt="You">
+          {% else %}
+            <div class="avatar-circle bg-primary text-white me-3" style="width:40px;height:40px;font-size:1rem;">
+              {{ current_user.full_name[0].upper() }}
+            </div>
+          {% endif %}
+          <div>
+            <div class="fw-semibold">{{ current_user.full_name }}</div>
+            <small class="text-muted">{{ current_user.email }}</small>
+          </div>
+        </div>
+
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="client_id" value="{{ request.args.get('client_id', '') }}">
+          <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+          <input type="hidden" name="state" value="{{ state }}">
+          <input type="hidden" name="scope" value="{{ scope }}">
+          <input type="hidden" name="response_type" value="code">
+          <div class="d-grid gap-2">
+            <button type="submit" name="action" value="approve" class="btn btn-primary btn-lg">
+              <i data-feather="check-circle" class="me-2"></i>Authorize {{ oauth_app.name }}
+            </button>
+            <button type="submit" name="action" value="deny" class="btn btn-outline-secondary">
+              Deny
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card-footer text-center">
+        <small class="text-muted">
+          <i data-feather="shield" style="width:12px;height:12px;" class="me-1"></i>
+          You are logged in as <strong>{{ current_user.username }}</strong>.
+          <a href="{{ url_for('logout') }}">Not you?</a>
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

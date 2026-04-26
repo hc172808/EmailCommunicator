@@ -61,3 +61,4 @@ with app.app_context():
     
     # Import routes after app context is established
     import routes  # noqa: F401
+    import oauth   # noqa: F401

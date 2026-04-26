@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}SSO Applications – Admin{% endblock %}
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <h2 class="mb-0"><i data-feather="link" class="me-2"></i>SSO Applications</h2>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-8">
+    {% if apps %}
+    {% for app in apps %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="d-flex align-items-center gap-3">
+            {% if app.logo_url %}
+              <img src="{{ app.logo_url }}" height="40" class="rounded" alt="{{ app.name }}">
+            {% else %}
+              <div class="avatar-circle bg-primary text-white" style="width:40px;height:40px;font-size:1rem;flex-shrink:0;">{{ app.name[0].upper() }}</div>
+            {% endif %}
+            <div>
+              <h5 class="mb-0">{{ app.name }}</h5>
+              {% if app.website_url %}<small class="text-muted">{{ app.website_url }}</small>{% endif %}
+              {% if app.description %}<p class="mb-0 text-muted small mt-1">{{ app.description }}</p>{% endif %}
+            </div>
+          </div>
+          <span class="badge {{ 'bg-success' if app.is_active else 'bg-secondary' }}">
+            {{ 'Active' if app.is_active else 'Inactive' }}
+          </span>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="row g-2 mb-3">
+          <div class="col-12">
+            <label class="form-label text-muted small mb-1">Client ID</label>
+            <code class="d-block p-2 rounded user-select-all" style="background:rgba(255,255,255,.06);word-break:break-all;">{{ app.client_id }}</code>
+          </div>
+          <div class="col-12">
+            <label class="form-label text-muted small mb-1">Client Secret</label>
+            <div class="d-flex gap-2">
+              <code class="d-block p-2 rounded flex-grow-1 user-select-all" id="secret-{{ app.id }}" style="background:rgba(255,255,255,.06);word-break:break-all;filter:blur(4px);cursor:pointer;" onclick="this.style.filter='none'" title="Click to reveal">{{ app.client_secret }}</code>
+            </div>
+            <small class="text-muted">Click to reveal</small>
+          </div>
+          <div class="col-12">
+            <label class="form-label text-muted small mb-1">Allowed Redirect URIs</label>
+            <pre class="p-2 rounded mb-0 small" style="background:rgba(255,255,255,.06);">{{ app.redirect_uris }}</pre>
+          </div>
+        </div>
+
+        <!-- Integration snippet -->
+        <details class="mb-3">
+          <summary class="text-muted small" style="cursor:pointer;">
+            <i data-feather="code" style="width:13px;height:13px;" class="me-1"></i>Integration snippet
+          </summary>
+          <div class="mt-2">
+            <p class="small text-muted mb-1">Paste this into your other website:</p>
+            <pre class="p-2 rounded small user-select-all" style="background:rgba(255,255,255,.06);white-space:pre-wrap;">&#60;!-- SSO Login Button --&#62;
+&#60;div id="sso-login-btn"&#62;&#60;/div&#62;
+&#60;script src="{{ base_url }}/oauth/widget.js?client_id={{ app.client_id }}&amp;redirect_uri=YOUR_CALLBACK_URL"&#62;&#60;/script&#62;</pre>
+            <p class="small text-muted mt-2 mb-1">Or link directly:</p>
+            <pre class="p-2 rounded small user-select-all" style="background:rgba(255,255,255,.06);white-space:pre-wrap;">{{ base_url }}/oauth/authorize?client_id={{ app.client_id }}&amp;redirect_uri=YOUR_CALLBACK_URL&amp;response_type=code&amp;scope=profile</pre>
+            <p class="small text-muted mt-2 mb-1">Exchange the code for a token (server-side POST):</p>
+            <pre class="p-2 rounded small user-select-all" style="background:rgba(255,255,255,.06);white-space:pre-wrap;">POST {{ base_url }}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+&code=CODE_FROM_REDIRECT
+&redirect_uri=YOUR_CALLBACK_URL
+&client_id={{ app.client_id }}
+&client_secret=YOUR_CLIENT_SECRET</pre>
+            <p class="small text-muted mt-2 mb-1">Then get user info:</p>
+            <pre class="p-2 rounded small user-select-all" style="background:rgba(255,255,255,.06);white-space:pre-wrap;">GET {{ base_url }}/oauth/userinfo
+Authorization: Bearer ACCESS_TOKEN</pre>
+          </div>
+        </details>
+
+        <div class="d-flex gap-2">
+          <form method="POST" action="{{ url_for('admin_regenerate_oauth_secret', app_id=app.id) }}" onsubmit="return confirm('Regenerate secret? Existing integrations using the old secret will break.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-warning">Regenerate Secret</button>
+          </form>
+          <form method="POST" action="{{ url_for('admin_toggle_oauth_app', app_id=app.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+              {{ 'Deactivate' if app.is_active else 'Activate' }}
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('admin_delete_oauth_app', app_id=app.id) }}" onsubmit="return confirm('Delete this app? This cannot be undone.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="card">
+      <div class="card-body text-center py-5">
+        <i data-feather="link" style="width:48px;height:48px;" class="text-muted mb-3 d-block mx-auto"></i>
+        <h5 class="text-muted">No SSO applications yet</h5>
+        <p class="text-muted">Register your first app using the form on the right.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">
+        <h6 class="mb-0"><i data-feather="plus" class="me-2"></i>Register New App</h6>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('admin_create_oauth_app') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label">App Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="My Website">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <input type="text" name="description" class="form-control" placeholder="What this app does">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Website URL</label>
+            <input type="url" name="website_url" class="form-control" placeholder="https://example.com">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Logo URL</label>
+            <input type="url" name="logo_url" class="form-control" placeholder="https://example.com/logo.png">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Allowed Redirect URIs <span class="text-danger">*</span></label>
+            <textarea name="redirect_uris" class="form-control" rows="3" required
+                      placeholder="https://example.com/callback&#10;https://example.com/auth/callback"></textarea>
+            <div class="form-text">One URL per line</div>
+          </div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Create App</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header"><h6 class="mb-0"><i data-feather="info" class="me-2"></i>How It Works</h6></div>
+      <div class="card-body small text-muted">
+        <ol class="ps-3 mb-0">
+          <li class="mb-1">Register your external website here to get a <strong>Client ID</strong> and <strong>Client Secret</strong>.</li>
+          <li class="mb-1">Add the widget snippet (or a link) to your site.</li>
+          <li class="mb-1">Users click "Sign in" and are sent here to log in and approve.</li>
+          <li class="mb-1">They are redirected back with a <strong>code</strong>.</li>
+          <li class="mb-1">Your server exchanges the code for an <strong>access token</strong>.</li>
+          <li>Use the token to call <code>/oauth/userinfo</code> to get their profile.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
