@@ -18,7 +18,10 @@ Preferred communication style: Simple, everyday language.
 - **MVC Pattern**: Separation of models (database), views (templates), and controllers (routes)
 - **Modular Design**: Separate modules for email services, security, backup, domain management, and OAuth SSO
 - **Security-First Architecture**: Built-in fail2ban-like protection, rate limiting, and intrusion detection
-- **OAuth 2.0 SSO Provider**: Full Authorization Code flow (`oauth.py`) with embeddable widget, `/oauth/authorize`, `/oauth/token`, `/oauth/userinfo`, discovery document
+- **Full OpenID Connect / OAuth 2.0 Provider**: Authorization Code + PKCE flows, refresh tokens, JWT ID tokens, token revocation, token introspection, JWKS, discovery document (`oauth.py`)
+- **Developer Portal**: Public `/developers` page, self-service app registration (`/developers/apps/register`), admin reviews pending apps before approval
+- **Domain-Locked Registration**: All user emails auto-assigned as `username@org_domain`; domain configurable from admin settings
+- **Account Approval**: Admin can require approval for new accounts; inactive accounts blocked at login
 
 ## Database Models
 - **User Management**: Comprehensive user profiles with email server configurations

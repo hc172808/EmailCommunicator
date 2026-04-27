@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Register an App – Developer Portal{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="mb-4">
+      <a href="{{ url_for('developer_my_apps') }}" class="text-muted small">
+        <i data-feather="arrow-left" style="width:14px;height:14px;" class="me-1"></i>My Apps
+      </a>
+    </div>
+
+    <div class="card">
+      <div class="card-header py-4 text-center">
+        <i data-feather="plus-circle" style="width:32px;height:32px;" class="text-primary mb-2 d-block mx-auto"></i>
+        <h4 class="mb-0 fw-bold">Register an App</h4>
+        <p class="text-muted small mb-0 mt-1">Get credentials to add "Sign in with Netlifegy" to your project.</p>
+      </div>
+      <div class="card-body p-4">
+        <form method="POST" action="{{ url_for('developer_register_app') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">App Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required placeholder="My Website" maxlength="100">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Description</label>
+            <input type="text" name="description" class="form-control"
+                   placeholder="What does your app do?" maxlength="255">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Website URL</label>
+            <input type="url" name="website_url" class="form-control" placeholder="https://myapp.com">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Logo URL</label>
+            <input type="url" name="logo_url" class="form-control" placeholder="https://myapp.com/logo.png">
+            <div class="form-text">Shown on the consent screen. Optional.</div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Allowed Redirect URIs <span class="text-danger">*</span></label>
+            <textarea name="redirect_uris" class="form-control font-monospace" rows="4" required
+                      placeholder="https://myapp.com/auth/callback&#10;http://localhost:3000/callback"></textarea>
+            <div class="form-text">One URL per line. These are the URLs we'll send users back to after login.</div>
+          </div>
+
+          {% if not current_user.is_admin %}
+          <div class="alert alert-info py-2 small mb-4">
+            <i data-feather="info" style="width:14px;height:14px;" class="me-1"></i>
+            Your app will be reviewed by an admin before you can use it. This usually takes less than 24 hours.
+          </div>
+          {% endif %}
+
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i data-feather="check-circle" class="me-2"></i>
+              {{ 'Register App' if current_user.is_admin else 'Submit for Review' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header"><h6 class="mb-0"><i data-feather="help-circle" class="me-2"></i>What happens next?</h6></div>
+      <div class="card-body small text-muted">
+        <ol class="ps-3 mb-0">
+          <li class="mb-1">After approval you'll get a <strong>Client ID</strong> and <strong>Client Secret</strong>.</li>
+          <li class="mb-1">Drop the widget snippet into your site, or use our OAuth flow directly.</li>
+          <li class="mb-1">Users click "Sign in with Netlifegy" and authorize your app on the consent screen.</li>
+          <li class="mb-1">Your server exchanges the code for an access token and fetches the user's profile.</li>
+          <li>Full docs at <a href="{{ url_for('developers') }}">Developer Portal</a>.</li>
+        </ol>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

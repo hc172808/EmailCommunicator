@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}Developer Portal – Netlifegy Identity{% endblock %}
+
+{% block content %}
+
+<!-- Hero -->
+<div class="text-center py-5 mb-5">
+  <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary mb-4"
+       style="width:72px;height:72px;">
+    <i data-feather="shield" style="width:36px;height:36px;color:#fff;"></i>
+  </div>
+  <h1 class="fw-bold mb-2" style="font-size:2.4rem;">Netlifegy Identity</h1>
+  <p class="lead text-muted mb-4" style="max-width:560px;margin:0 auto;">
+    Add <strong>Sign in with Netlifegy</strong> to any website or app in minutes.
+    One identity, every platform.
+  </p>
+  <div class="d-flex gap-3 justify-content-center flex-wrap">
+    {% if current_user.is_authenticated %}
+      <a href="{{ url_for('developer_register_app') }}" class="btn btn-primary btn-lg px-4">
+        <i data-feather="plus-circle" class="me-2"></i>Register an App
+      </a>
+      <a href="{{ url_for('developer_my_apps') }}" class="btn btn-outline-secondary btn-lg px-4">
+        <i data-feather="grid" class="me-2"></i>My Apps
+      </a>
+    {% else %}
+      <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-4">
+        <i data-feather="user-plus" class="me-2"></i>Create an Account
+      </a>
+      <a href="{{ url_for('login') }}" class="btn btn-outline-secondary btn-lg px-4">
+        <i data-feather="log-in" class="me-2"></i>Sign In to Register an App
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Why better than Google? -->
+<div class="row g-4 mb-5">
+  {% set features = [
+    ['server', 'Your own server', 'You own and control 100% of the infrastructure. No third party can read, sell, or revoke your users data.'],
+    ['zap', 'Fast and lightweight', 'No bloated SDK required. Drop in one 2 KB JavaScript tag and you are live on any website or app.'],
+    ['lock', 'PKCE for mobile and SPAs', 'Native PKCE S256 support means mobile apps and single-page apps need no client secret — maximum security, minimum friction.'],
+    ['refresh-cw', 'Refresh tokens', '30-day refresh tokens keep sessions alive without forcing users to log in again — better UX for every app.'],
+    ['shield', 'OpenID Connect', 'Full OIDC discovery, JWT ID tokens, JWKS, introspection, and revocation. Drop-in replacement for Google Sign-In.'],
+    ['check-circle', 'Admin control', 'You approve every app that connects. No rogue apps, no hidden scopes, full audit trail.']
+  ] %}
+  {% for f in features %}
+  <div class="col-md-4">
+    <div class="card h-100 border-0" style="background:rgba(255,255,255,.04);">
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <span class="p-2 rounded-2 bg-primary bg-opacity-10 text-primary d-inline-flex">
+            <i data-feather="{{ f[0] }}" style="width:20px;height:20px;"></i>
+          </span>
+        </div>
+        <h6 class="fw-bold mb-2">{{ f[1] }}</h6>
+        <p class="text-muted small mb-0">{{ f[2] }}</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Quick-start tabs -->
+<h3 class="fw-bold mb-3"><i data-feather="code" class="me-2"></i>Quick Start</h3>
+<ul class="nav nav-tabs mb-0" id="devTabs">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-widget">Widget (1-line)</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-python">Python</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-node">Node.js</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-php">PHP</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pkce">Mobile / SPA (PKCE)</button></li>
+</ul>
+<div class="tab-content border border-top-0 rounded-bottom mb-5 p-4"
+     style="background:rgba(0,0,0,.2);">
+
+  <!-- Widget -->
+  <div class="tab-pane fade show active" id="tab-widget">
+    <p class="text-muted small mb-3">The easiest way — paste two lines into any HTML page:</p>
+    <pre class="mb-3 small user-select-all"><code>&lt;!-- Place this where you want the button --&gt;
+&lt;div data-nlg-login&gt;&lt;/div&gt;
+
+&lt;!-- Drop-in script (replace YOUR_CLIENT_ID and YOUR_CALLBACK_URL) --&gt;
+&lt;script src="{{ base_url }}/oauth/widget.js
+  ?client_id=YOUR_CLIENT_ID
+  &amp;redirect_uri=YOUR_CALLBACK_URL
+  &amp;scope=openid+profile+email
+  &amp;theme=auto"&gt;&lt;/script&gt;</code></pre>
+    <p class="text-muted small mb-2">Popup mode (opens a small login window instead of redirecting):</p>
+    <pre class="small user-select-all"><code>&lt;script src="{{ base_url }}/oauth/widget.js?client_id=…&amp;popup=true"&gt;&lt;/script&gt;</code></pre>
+  </div>
+
+  <!-- Python -->
+  <div class="tab-pane fade" id="tab-python">
+    <pre class="small user-select-all"><code>import requests, os
+
+CLIENT_ID     = os.environ['NLG_CLIENT_ID']
+CLIENT_SECRET = os.environ['NLG_CLIENT_SECRET']
+REDIRECT_URI  = 'https://yoursite.com/auth/callback'
+TOKEN_URL     = '{{ base_url }}/oauth/token'
+USERINFO_URL  = '{{ base_url }}/oauth/userinfo'
+
+# 1. Redirect the user to the authorization URL:
+AUTH_URL = (
+    '{{ base_url }}/oauth/authorize'
+    f'?client_id={CLIENT_ID}'
+    f'&redirect_uri={REDIRECT_URI}'
+    '&response_type=code'
+    '&scope=openid+profile+email'
+)
+
+# 2. In your callback handler, exchange the code:
+def callback(code):
+    r = requests.post(TOKEN_URL, data={
+        'grant_type':    'authorization_code',
+        'code':          code,
+        'redirect_uri':  REDIRECT_URI,
+        'client_id':     CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+    })
+    tokens = r.json()
+    access_token = tokens['access_token']
+
+    # 3. Get user info:
+    user = requests.get(USERINFO_URL,
+        headers={'Authorization': f'Bearer {access_token}'}
+    ).json()
+    print(user)   # {'sub': '1', 'name': '…', 'email': '…@netlifegy.com'}</code></pre>
+  </div>
+
+  <!-- Node.js -->
+  <div class="tab-pane fade" id="tab-node">
+    <pre class="small user-select-all"><code>const axios = require('axios');
+
+const CLIENT_ID     = process.env.NLG_CLIENT_ID;
+const CLIENT_SECRET = process.env.NLG_CLIENT_SECRET;
+const REDIRECT_URI  = 'https://yoursite.com/auth/callback';
+const BASE          = '{{ base_url }}';
+
+// 1. Build the authorization URL:
+const authUrl = `${BASE}/oauth/authorize?client_id=${CLIENT_ID}`
+  + `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`
+  + `&response_type=code&scope=openid+profile+email`;
+
+// 2. In your Express callback handler:
+app.get('/auth/callback', async (req, res) => {
+  const { data: tokens } = await axios.post(`${BASE}/oauth/token`,
+    new URLSearchParams({
+      grant_type:    'authorization_code',
+      code:          req.query.code,
+      redirect_uri:  REDIRECT_URI,
+      client_id:     CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+    })
+  );
+
+  // 3. Get user info:
+  const { data: user } = await axios.get(`${BASE}/oauth/userinfo`, {
+    headers: { Authorization: `Bearer ${tokens.access_token}` }
+  });
+  console.log(user);  // { sub: '1', name: '…', email: '…@netlifegy.com' }
+});</code></pre>
+  </div>
+
+  <!-- PHP -->
+  <div class="tab-pane fade" id="tab-php">
+    <pre class="small user-select-all"><code>&lt;?php
+$CLIENT_ID     = getenv('NLG_CLIENT_ID');
+$CLIENT_SECRET = getenv('NLG_CLIENT_SECRET');
+$REDIRECT_URI  = 'https://yoursite.com/auth/callback';
+$BASE          = '{{ base_url }}';
+
+// 1. Redirect user:
+$authUrl = "$BASE/oauth/authorize?client_id=$CLIENT_ID"
+  . "&redirect_uri=" . urlencode($REDIRECT_URI)
+  . "&response_type=code&scope=openid+profile+email";
+
+// 2. Callback — exchange code for token:
+$ch = curl_init("$BASE/oauth/token");
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+  'grant_type'    =&gt; 'authorization_code',
+  'code'          =&gt; $_GET['code'],
+  'redirect_uri'  =&gt; $REDIRECT_URI,
+  'client_id'     =&gt; $CLIENT_ID,
+  'client_secret' =&gt; $CLIENT_SECRET,
+]));
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$tokens = json_decode(curl_exec($ch), true);
+
+// 3. Get user info:
+$ch2 = curl_init("$BASE/oauth/userinfo");
+curl_setopt($ch2, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$tokens['access_token']}"]);
+curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+$user = json_decode(curl_exec($ch2), true);
+var_dump($user);</code></pre>
+  </div>
+
+  <!-- PKCE (mobile / SPA) -->
+  <div class="tab-pane fade" id="tab-pkce">
+    <p class="text-muted small mb-3">For mobile apps and SPAs — no client secret needed, extra secure:</p>
+    <pre class="small user-select-all"><code>// JavaScript (works in browser or React Native)
+import crypto from 'crypto';  // use expo-crypto on React Native
+
+function base64url(buf) {
+  return buf.toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+// 1. Generate PKCE pair
+const verifier  = base64url(crypto.randomBytes(32));
+const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
+
+sessionStorage.setItem('pkce_verifier', verifier);
+
+// 2. Redirect to authorization URL (no client_secret)
+const authUrl = '{{ base_url }}/oauth/authorize'
+  + '?client_id=YOUR_CLIENT_ID'
+  + '&redirect_uri=' + encodeURIComponent('yourapp://callback')
+  + '&response_type=code'
+  + '&scope=openid+profile+email'
+  + '&code_challenge=' + challenge
+  + '&code_challenge_method=S256';
+
+window.location.href = authUrl;
+
+// 3. In your callback — exchange code WITHOUT client_secret
+async function handleCallback(code) {
+  const res = await fetch('{{ base_url }}/oauth/token', {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type:     'authorization_code',
+      code:           code,
+      redirect_uri:   'yourapp://callback',
+      client_id:      'YOUR_CLIENT_ID',
+      code_verifier:  sessionStorage.getItem('pkce_verifier'),
+      // No client_secret needed!
+    }),
+  });
+  const { access_token, refresh_token, id_token } = await res.json();
+}</code></pre>
+  </div>
+
+</div>
+
+<!-- Endpoints reference -->
+<h3 class="fw-bold mb-3"><i data-feather="terminal" class="me-2"></i>API Reference</h3>
+<div class="table-responsive mb-5">
+  <table class="table table-bordered small">
+    <thead class="table-secondary">
+      <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>GET</td><td><code>{{ base_url }}/oauth/authorize</code></td><td>Authorization consent screen</td></tr>
+      <tr><td>POST</td><td><code>{{ base_url }}/oauth/token</code></td><td>Exchange code for tokens / refresh</td></tr>
+      <tr><td>GET</td><td><code>{{ base_url }}/oauth/userinfo</code></td><td>Get user profile (Bearer token)</td></tr>
+      <tr><td>POST</td><td><code>{{ base_url }}/oauth/revoke</code></td><td>Revoke access or refresh token</td></tr>
+      <tr><td>POST</td><td><code>{{ base_url }}/oauth/introspect</code></td><td>Check if a token is valid</td></tr>
+      <tr><td>GET</td><td><code>{{ base_url }}/oauth/.well-known/openid-configuration</code></td><td>OIDC discovery document</td></tr>
+      <tr><td>GET</td><td><code>{{ base_url }}/oauth/widget.js</code></td><td>Embeddable "Sign in" button script</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- CTA -->
+{% if not current_user.is_authenticated %}
+<div class="text-center py-4">
+  <h4 class="fw-bold mb-2">Ready to integrate?</h4>
+  <p class="text-muted mb-4">Create an account, then register your app — it takes less than 5 minutes.</p>
+  <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-5">
+    <i data-feather="arrow-right" class="me-2"></i>Get Started
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

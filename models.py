@@ -231,7 +231,12 @@ class OAuthApp(db.Model):
     client_secret = db.Column(String(128), nullable=False,
                               default=lambda: secrets.token_urlsafe(64))
     redirect_uris = db.Column(Text, nullable=False)  # newline-separated list
+    allowed_scopes = db.Column(String(500), default='openid profile email phone')
     is_active = db.Column(Boolean, default=True)
+    # For self-service developer registration
+    is_pending = db.Column(Boolean, default=False)
+    developer_email = db.Column(String(255))
+    developer_name = db.Column(String(255))
     created_at = db.Column(DateTime, default=datetime.utcnow)
     created_by = db.Column(Integer, db.ForeignKey('users.id'))
 
@@ -239,6 +244,8 @@ class OAuthApp(db.Model):
                                  cascade='all, delete-orphan')
     access_tokens = db.relationship('OAuthAccessToken', backref='app', lazy='dynamic',
                                     cascade='all, delete-orphan')
+    refresh_tokens = db.relationship('OAuthRefreshToken', backref='app', lazy='dynamic',
+                                     cascade='all, delete-orphan')
 
     def allowed_redirect(self, uri):
         allowed = [u.strip() for u in (self.redirect_uris or '').splitlines() if u.strip()]
@@ -258,7 +265,11 @@ class OAuthAuthorizationCode(db.Model):
     app_id = db.Column(Integer, db.ForeignKey('oauth_apps.id'), nullable=False)
     user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
     redirect_uri = db.Column(String(500), nullable=False)
-    scope = db.Column(String(200), default='profile')
+    scope = db.Column(String(200), default='openid profile email')
+    nonce = db.Column(String(256))
+    # PKCE fields (optional — used by public clients like SPAs and mobile apps)
+    code_challenge = db.Column(String(256))
+    code_challenge_method = db.Column(String(10))
     created_at = db.Column(DateTime, default=datetime.utcnow)
     expires_at = db.Column(DateTime, nullable=False)
     used = db.Column(Boolean, default=False)
@@ -292,6 +303,29 @@ class OAuthAccessToken(db.Model):
 
     def __repr__(self):
         return f'<OAuthAccessToken app={self.app_id} user={self.user_id}>'
+
+
+class OAuthRefreshToken(db.Model):
+    """Long-lived refresh token for obtaining new access tokens without re-login."""
+    __tablename__ = 'oauth_refresh_tokens'
+
+    id = db.Column(Integer, primary_key=True)
+    token = db.Column(String(128), unique=True, nullable=False,
+                      default=lambda: secrets.token_urlsafe(64))
+    app_id = db.Column(Integer, db.ForeignKey('oauth_apps.id'), nullable=False)
+    user_id = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    scope = db.Column(String(200), default='openid profile email')
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    expires_at = db.Column(DateTime, nullable=False)
+    revoked = db.Column(Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('oauth_refresh_tokens', lazy='dynamic'))
+
+    def is_valid(self):
+        return not self.revoked and datetime.utcnow() < self.expires_at
+
+    def __repr__(self):
+        return f'<OAuthRefreshToken app={self.app_id} user={self.user_id}>'
 
 
 class APIToken(db.Model):

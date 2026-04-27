@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}My Apps – Developer Portal{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0 fw-bold"><i data-feather="grid" class="me-2"></i>My Apps</h2>
+    <small class="text-muted">Apps you've registered with Netlifegy Identity</small>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('developers') }}" class="btn btn-outline-secondary">
+      <i data-feather="book-open" class="me-2"></i>Docs
+    </a>
+    <a href="{{ url_for('developer_register_app') }}" class="btn btn-primary">
+      <i data-feather="plus" class="me-2"></i>Register App
+    </a>
+  </div>
+</div>
+
+{% if apps %}
+  {% for app in apps %}
+  <div class="card mb-3 {{ 'border-warning' if app.is_pending else '' }}">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex align-items-center gap-3">
+          {% if app.logo_url %}
+            <img src="{{ app.logo_url }}" height="40" class="rounded" alt="{{ app.name }}">
+          {% else %}
+            <div class="rounded-2 bg-primary text-white d-flex align-items-center justify-content-center fw-bold"
+                 style="width:40px;height:40px;font-size:1.1rem;flex-shrink:0;">
+              {{ app.name[0].upper() }}
+            </div>
+          {% endif %}
+          <div>
+            <h5 class="mb-0 fw-semibold">{{ app.name }}</h5>
+            {% if app.website_url %}<small class="text-muted">{{ app.website_url }}</small>{% endif %}
+          </div>
+        </div>
+        <span class="badge {{ 'bg-warning text-dark' if app.is_pending else ('bg-success' if app.is_active else 'bg-secondary') }}">
+          {{ 'Pending Review' if app.is_pending else ('Active' if app.is_active else 'Inactive') }}
+        </span>
+      </div>
+
+      {% if app.is_pending %}
+      <div class="alert alert-warning py-2 small mb-3">
+        <i data-feather="clock" style="width:14px;height:14px;" class="me-1"></i>
+        Your app is pending admin approval. You'll receive access once it's reviewed.
+      </div>
+      {% else %}
+      <div class="row g-3 mb-3">
+        <div class="col-12">
+          <label class="form-label text-muted small mb-1">Client ID</label>
+          <code class="d-block p-2 rounded small user-select-all" style="background:rgba(255,255,255,.06);word-break:break-all;">{{ app.client_id }}</code>
+        </div>
+        <div class="col-12">
+          <label class="form-label text-muted small mb-1">Client Secret <span class="text-warning">(keep this private)</span></label>
+          <div class="input-group input-group-sm">
+            <code class="form-control font-monospace small" id="secret-{{ app.id }}"
+                  style="filter:blur(4px);cursor:pointer;background:rgba(255,255,255,.06);"
+                  onclick="this.style.filter='none'">{{ app.client_secret }}</code>
+            <button class="btn btn-outline-secondary" onclick="
+              var el = document.getElementById('secret-{{ app.id }}');
+              el.style.filter = el.style.filter ? '' : 'blur(4px)';
+            ">👁</button>
+          </div>
+          <small class="text-muted">Click to reveal</small>
+        </div>
+        <div class="col-12">
+          <label class="form-label text-muted small mb-1">Redirect URIs</label>
+          <pre class="p-2 rounded small mb-0" style="background:rgba(255,255,255,.06);">{{ app.redirect_uris }}</pre>
+        </div>
+      </div>
+
+      <details class="mb-3">
+        <summary class="small text-muted" style="cursor:pointer;">
+          <i data-feather="code" style="width:13px;height:13px;" class="me-1"></i>Widget snippet
+        </summary>
+        <pre class="mt-2 p-3 rounded small user-select-all" style="background:rgba(0,0,0,.2);">&lt;div data-nlg-login&gt;&lt;/div&gt;
+&lt;script src="{{ base_url }}/oauth/widget.js?client_id={{ app.client_id }}&amp;redirect_uri=YOUR_CALLBACK&amp;theme=auto"&gt;&lt;/script&gt;</pre>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+{% else %}
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <i data-feather="grid" style="width:48px;height:48px;" class="text-muted mb-3 d-block mx-auto"></i>
+      <h5 class="text-muted">No apps yet</h5>
+      <p class="text-muted mb-4">Register your first app to get a Client ID and start integrating.</p>
+      <a href="{{ url_for('developer_register_app') }}" class="btn btn-primary">
+        <i data-feather="plus" class="me-2"></i>Register Your First App
+      </a>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

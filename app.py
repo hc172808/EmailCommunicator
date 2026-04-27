@@ -60,9 +60,27 @@ with app.app_context():
     # Make sure to import the models here or their tables won't be created
     import models  # noqa: F401
     import security  # noqa: F401
-    
+
     db.create_all()
-    
+
+    # Run safe column migrations for columns added after initial table creation
+    from sqlalchemy import text
+    _migrations = [
+        "ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce VARCHAR(256)",
+        "ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS code_challenge VARCHAR(256)",
+        "ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS code_challenge_method VARCHAR(10)",
+        "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS allowed_scopes VARCHAR(500) DEFAULT 'openid profile email phone'",
+        "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS is_pending BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS developer_email VARCHAR(255)",
+        "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS developer_name VARCHAR(255)",
+    ]
+    for _sql in _migrations:
+        try:
+            db.session.execute(text(_sql))
+        except Exception:
+            pass
+    db.session.commit()
+
     # Import routes after app context is established
     import routes  # noqa: F401
     import oauth   # noqa: F401

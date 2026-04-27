@@ -1,12 +1,61 @@
 {% extends "base.html" %}
 {% block title %}SSO Applications – Admin{% endblock %}
 {% block content %}
-<div class="row mb-4">
-  <div class="col-12 d-flex justify-content-between align-items-center">
-    <h2 class="mb-0"><i data-feather="link" class="me-2"></i>SSO Applications</h2>
-  </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i data-feather="link" class="me-2"></i>SSO Applications</h2>
 </div>
 
+{% if pending_apps %}
+<div class="alert alert-warning d-flex align-items-center mb-4">
+  <i data-feather="clock" class="me-2"></i>
+  <div><strong>{{ pending_apps|length }} app{{ 's' if pending_apps|length != 1 }} awaiting review</strong> from developers. Scroll down to approve or reject.</div>
+</div>
+{% endif %}
+
+<!-- ── Pending developer submissions ── -->
+{% if pending_apps %}
+<h5 class="mb-3 text-warning"><i data-feather="clock" class="me-2"></i>Pending Review</h5>
+{% for app in pending_apps %}
+<div class="card mb-3 border-warning">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start mb-2">
+      <div>
+        <h5 class="mb-0 fw-semibold">{{ app.name }}</h5>
+        {% if app.website_url %}<small class="text-muted">{{ app.website_url }}</small>{% endif %}
+        {% if app.description %}<p class="text-muted small mt-1 mb-0">{{ app.description }}</p>{% endif %}
+      </div>
+      <span class="badge bg-warning text-dark">Pending</span>
+    </div>
+    <div class="row g-2 small mb-3">
+      <div class="col-md-6"><strong>Developer:</strong> {{ app.developer_name or '—' }} &lt;{{ app.developer_email or '—' }}&gt;</div>
+      <div class="col-md-6"><strong>Submitted:</strong> {{ app.created_at.strftime('%b %d, %Y %H:%M') if app.created_at else '—' }}</div>
+      <div class="col-12">
+        <strong>Redirect URIs:</strong>
+        <pre class="p-2 rounded mt-1 small mb-0" style="background:rgba(255,255,255,.06);">{{ app.redirect_uris }}</pre>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <form method="POST" action="{{ url_for('admin_approve_oauth_app', app_id=app.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success btn-sm">
+          <i data-feather="check" style="width:14px;height:14px;" class="me-1"></i>Approve
+        </button>
+      </form>
+      <form method="POST" action="{{ url_for('admin_delete_oauth_app', app_id=app.id) }}"
+            onsubmit="return confirm('Reject and delete this app?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+          <i data-feather="x" style="width:14px;height:14px;" class="me-1"></i>Reject
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+<hr class="my-4">
+{% endif %}
+
+<!-- ── Active apps ── -->
 <div class="row">
   <div class="col-lg-8">
     {% if apps %}

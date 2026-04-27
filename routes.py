@@ -1377,9 +1377,11 @@ def admin_oauth_apps():
         flash('Access denied.', 'error')
         return redirect(url_for('index'))
     from models import OAuthApp
-    apps = OAuthApp.query.order_by(OAuthApp.created_at.desc()).all()
+    pending_apps = OAuthApp.query.filter_by(is_pending=True).order_by(OAuthApp.created_at.desc()).all()
+    active_apps  = OAuthApp.query.filter_by(is_pending=False).order_by(OAuthApp.created_at.desc()).all()
     base_url = request.host_url.rstrip('/')
-    return render_template('admin/oauth_apps.html', apps=apps, base_url=base_url)
+    return render_template('admin/oauth_apps.html',
+                           apps=active_apps, pending_apps=pending_apps, base_url=base_url)
 
 
 @app.route('/admin/oauth-apps/create', methods=['POST'])
@@ -1454,6 +1456,76 @@ def admin_delete_oauth_app(app_id):
     db.session.delete(app_record)
     db.session.commit()
     flash(f'"{name}" has been deleted.', 'success')
+    return redirect(url_for('admin_oauth_apps'))
+
+
+# ── Developer Portal ─────────────────────────────────────────────────────────
+
+@app.route('/developers')
+def developers():
+    base_url = request.host_url.rstrip('/')
+    return render_template('developers.html', base_url=base_url)
+
+
+@app.route('/developers/apps')
+@login_required
+def developer_my_apps():
+    from models import OAuthApp
+    my_apps = OAuthApp.query.filter_by(created_by=current_user.id).order_by(OAuthApp.created_at.desc()).all()
+    base_url = request.host_url.rstrip('/')
+    return render_template('developer_apps.html', apps=my_apps, base_url=base_url)
+
+
+@app.route('/developers/apps/register', methods=['GET', 'POST'])
+@login_required
+def developer_register_app():
+    from models import OAuthApp
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        redirect_uris = request.form.get('redirect_uris', '').strip()
+        if not name or not redirect_uris:
+            flash('App name and at least one redirect URI are required.', 'error')
+            return redirect(url_for('developer_register_app'))
+
+        # Admins get immediate approval; regular users submit for review
+        is_pending = not current_user.is_admin
+        app_record = OAuthApp(
+            name=name,
+            description=request.form.get('description', '').strip(),
+            website_url=request.form.get('website_url', '').strip(),
+            logo_url=request.form.get('logo_url', '').strip(),
+            redirect_uris=redirect_uris,
+            is_pending=is_pending,
+            is_active=not is_pending,
+            developer_email=current_user.email,
+            developer_name=current_user.full_name,
+            created_by=current_user.id,
+        )
+        db.session.add(app_record)
+        db.session.commit()
+
+        if is_pending:
+            flash(f'"{name}" submitted for admin review. You\'ll be able to use it once approved.', 'info')
+        else:
+            flash(f'"{name}" registered and ready to use.', 'success')
+        return redirect(url_for('developer_my_apps'))
+
+    return render_template('developer_register.html')
+
+
+@app.route('/admin/oauth-apps/<int:app_id>/approve', methods=['POST'])
+@login_required
+@security_check
+def admin_approve_oauth_app(app_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    app_record = OAuthApp.query.get_or_404(app_id)
+    app_record.is_pending = False
+    app_record.is_active = True
+    db.session.commit()
+    flash(f'"{app_record.name}" approved and activated.', 'success')
     return redirect(url_for('admin_oauth_apps'))
 
 
