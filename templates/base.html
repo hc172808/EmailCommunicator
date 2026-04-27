@@ -67,6 +67,10 @@
                             Admin
                         </a>
                         <ul class="dropdown-menu">
+                            <li><a class="dropdown-item fw-semibold" href="{{ url_for('admin_settings') }}">
+                                <i data-feather="sliders" class="me-2"></i>Control Panel
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">
                                 <i data-feather="bar-chart" class="me-2"></i>Dashboard
                             </a></li>
@@ -74,9 +78,8 @@
                                 <i data-feather="users" class="me-2"></i>Users
                             </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_security') }}">
-                                <i data-feather="shield" class="me-2"></i>Security
+                                <i data-feather="activity" class="me-2"></i>Security Logs
                             </a></li>
-                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin_oauth_apps') }}">
                                 <i data-feather="link" class="me-2"></i>SSO Apps
                             </a></li>

@@ -200,6 +200,23 @@ class SystemConfig(db.Model):
         return f'<SystemConfig {self.key}={self.value}>'
 
 
+class FirewallRule(db.Model):
+    """IP-based firewall rules — block or allow specific addresses."""
+    __tablename__ = 'firewall_rules'
+
+    id = db.Column(Integer, primary_key=True)
+    rule_type = db.Column(String(10), nullable=False)   # 'block' or 'allow'
+    ip_or_cidr = db.Column(String(100), nullable=False)
+    description = db.Column(String(255))
+    is_active = db.Column(Boolean, default=True)
+    hits = db.Column(Integer, default=0)
+    created_at = db.Column(DateTime, default=datetime.utcnow)
+    created_by = db.Column(Integer, db.ForeignKey('users.id'))
+
+    def __repr__(self):
+        return f'<FirewallRule {self.rule_type} {self.ip_or_cidr}>'
+
+
 class OAuthApp(db.Model):
     """A registered third-party client application that uses this server for SSO."""
     __tablename__ = 'oauth_apps'

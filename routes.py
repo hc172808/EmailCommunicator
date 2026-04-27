@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db, csrf
-from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig
+from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig, FirewallRule
 from email_service import EmailService
 from identity_emails import send_verification_email, send_password_reset_email
 from forms import (LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm,
@@ -29,6 +29,42 @@ MAINTENANCE_BYPASS_ROUTES = {'login', 'logout', 'static', 'maintenance_page',
                               'admin_toggle_maintenance',
                               'oauth_authorize', 'oauth_token', 'oauth_userinfo',
                               'oauth_discovery', 'oauth_widget'}
+
+def _client_ip():
+    """Return the real client IP, respecting X-Forwarded-For."""
+    return (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+            or request.remote_addr or '127.0.0.1')
+
+def _ip_matches(client_ip, pattern):
+    """Return True if client_ip matches pattern (single IP or CIDR)."""
+    import ipaddress
+    try:
+        if '/' in pattern:
+            return ipaddress.ip_address(client_ip) in ipaddress.ip_network(pattern, strict=False)
+        return client_ip == pattern
+    except ValueError:
+        return False
+
+@app.before_request
+def check_firewall():
+    """Block or allow IPs based on active firewall rules."""
+    if request.endpoint in ('static',):
+        return None
+    client_ip = _client_ip()
+    try:
+        rules = FirewallRule.query.filter_by(is_active=True).all()
+    except Exception:
+        return None
+    for rule in rules:
+        if _ip_matches(client_ip, rule.ip_or_cidr):
+            rule.hits = (rule.hits or 0) + 1
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            if rule.rule_type == 'block':
+                return render_template('firewall_blocked.html', ip=client_ip), 403
+    return None
 
 @app.before_request
 def check_maintenance():
@@ -1135,6 +1171,121 @@ def api_user_me():
         'created_at': user.created_at.isoformat() if user.created_at else None,
         'last_login': user.last_login.isoformat() if user.last_login else None,
     })
+
+
+# ── Admin Settings & Firewall ────────────────────────────────────────────────
+
+@app.route('/admin/settings')
+@login_required
+@security_check
+def admin_settings():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import OAuthApp
+    maintenance_on = SystemConfig.get('maintenance_mode', 'off') == 'on'
+    maintenance_message = SystemConfig.get('maintenance_message', '')
+    maintenance_features = SystemConfig.get('maintenance_features', '')
+    policy = {
+        'max_login_attempts': SystemConfig.get('max_login_attempts', '5'),
+        'ban_duration_minutes': SystemConfig.get('ban_duration_minutes', '30'),
+        'session_timeout': SystemConfig.get('session_timeout', '0'),
+        'min_password_length': SystemConfig.get('min_password_length', '8'),
+        'require_2fa': SystemConfig.get('require_2fa', 'off') == 'on',
+        'require_email_verify': SystemConfig.get('require_email_verify', 'off') == 'on',
+    }
+    stats = {
+        'total_users': User.query.count(),
+        'active_users': User.query.filter_by(active=True).count(),
+        'sso_apps': OAuthApp.query.count(),
+        'blocked_ips': FirewallRule.query.filter_by(rule_type='block', is_active=True).count(),
+    }
+    firewall_rules = FirewallRule.query.order_by(FirewallRule.created_at.desc()).all()
+    base_url = request.host_url.rstrip('/')
+    return render_template('admin/settings.html',
+        maintenance_on=maintenance_on,
+        maintenance_message=maintenance_message,
+        maintenance_features=maintenance_features,
+        policy=policy,
+        stats=stats,
+        firewall_rules=firewall_rules,
+        base_url=base_url)
+
+
+@app.route('/admin/firewall/add', methods=['POST'])
+@login_required
+@security_check
+def admin_firewall_add():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    ip_or_cidr = request.form.get('ip_or_cidr', '').strip()
+    rule_type = request.form.get('rule_type', 'block')
+    description = request.form.get('description', '').strip()
+    if not ip_or_cidr:
+        flash('IP address or CIDR is required.', 'error')
+        return redirect(url_for('admin_settings') + '#firewall')
+    import ipaddress
+    try:
+        if '/' in ip_or_cidr:
+            ipaddress.ip_network(ip_or_cidr, strict=False)
+        else:
+            ipaddress.ip_address(ip_or_cidr)
+    except ValueError:
+        flash(f'"{ip_or_cidr}" is not a valid IP address or CIDR range.', 'error')
+        return redirect(url_for('admin_settings') + '#firewall')
+    rule = FirewallRule(rule_type=rule_type, ip_or_cidr=ip_or_cidr,
+                        description=description, created_by=current_user.id)
+    db.session.add(rule)
+    db.session.commit()
+    flash(f'Firewall rule added: {rule_type.upper()} {ip_or_cidr}', 'success')
+    return redirect(url_for('admin_settings') + '#firewall')
+
+
+@app.route('/admin/firewall/<int:rule_id>/toggle', methods=['POST'])
+@login_required
+@security_check
+def admin_firewall_toggle(rule_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    rule = FirewallRule.query.get_or_404(rule_id)
+    rule.is_active = not rule.is_active
+    db.session.commit()
+    flash(f'Rule {"activated" if rule.is_active else "paused"}.', 'success')
+    return redirect(url_for('admin_settings') + '#firewall')
+
+
+@app.route('/admin/firewall/<int:rule_id>/delete', methods=['POST'])
+@login_required
+@security_check
+def admin_firewall_delete(rule_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    rule = FirewallRule.query.get_or_404(rule_id)
+    db.session.delete(rule)
+    db.session.commit()
+    flash('Firewall rule deleted.', 'success')
+    return redirect(url_for('admin_settings') + '#firewall')
+
+
+@app.route('/admin/settings/policy', methods=['POST'])
+@login_required
+@security_check
+def admin_save_policy():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    fields = ['max_login_attempts', 'ban_duration_minutes', 'session_timeout', 'min_password_length']
+    for f in fields:
+        val = request.form.get(f, '').strip()
+        if val:
+            SystemConfig.set(f, val)
+    SystemConfig.set('require_2fa', 'on' if request.form.get('require_2fa') else 'off')
+    SystemConfig.set('require_email_verify', 'on' if request.form.get('require_email_verify') else 'off')
+    flash('Security policy saved.', 'success')
+    return redirect(url_for('admin_settings') + '#policy')
 
 
 # ── OAuth / SSO Admin Routes ──────────────────────────────────────────────────
