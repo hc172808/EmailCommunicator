@@ -125,6 +125,11 @@ def login():
         ).first()
         
         if user and user.check_password(form.password.data):
+            # Block inactive / pending-approval accounts
+            if not user.active:
+                flash('Your account is pending admin approval. Please wait for an administrator to activate it.', 'warning')
+                return render_template('login.html', form=form)
+
             # Record successful login
             security_manager.record_successful_login(user)
             
@@ -154,22 +159,37 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 @security_check
 def register():
-    """User registration"""
+    """User registration — email is auto-assigned as username@org_domain."""
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-    
+
+    # Check if registration is invite-only or closed
+    reg_mode = SystemConfig.get('registration_mode', 'open')
+    if reg_mode == 'closed':
+        flash('Account registration is currently closed. Contact the administrator.', 'info')
+        return redirect(url_for('login'))
+
+    org_domain = SystemConfig.get('org_domain', 'netlifegy.com')
+    min_pw_len = int(SystemConfig.get('min_password_length', '8'))
+    require_approval = SystemConfig.get('require_account_approval', 'off') == 'on'
+
     form = RegistrationForm()
     if form.validate_on_submit():
+        # Enforce password length from policy
+        if len(form.password.data) < min_pw_len:
+            form.password.errors.append(f'Password must be at least {min_pw_len} characters.')
+            return render_template('register.html', form=form, org_domain=org_domain, min_pw_len=min_pw_len)
+
+        auto_email = f"{form.username.data.lower()}@{org_domain}"
+
         try:
-            # Handle profile picture upload
             profile_picture = None
             if form.profile_photo.data:
                 profile_picture = save_profile_picture(form.profile_photo.data)
-            
-            # Create new user
+
             user = User(
                 username=form.username.data,
-                email=form.email.data,
+                email=auto_email,
                 full_name=form.full_name.data,
                 phone_number=form.phone_number.data,
                 location=form.location.data,
@@ -181,34 +201,37 @@ def register():
                 smtp_password=form.smtp_password.data,
                 imap_server=form.imap_server.data,
                 imap_port=int(form.imap_port.data) if form.imap_port.data else None,
-                use_tls=form.use_tls.data
+                use_tls=form.use_tls.data,
+                # Pending approval means account is inactive until admin approves
+                active=not require_approval,
             )
             user.set_password(form.password.data)
-            
+
             db.session.add(user)
             db.session.flush()
-            
-            # Create verification token
+
             token = EmailVerificationToken(
                 user_id=user.id,
                 expires_at=datetime.utcnow() + timedelta(hours=24)
             )
             db.session.add(token)
             db.session.commit()
-            
-            # Send verification email
+
             base_url = request.host_url.rstrip('/')
             send_verification_email(user, token.token, base_url)
-            
-            flash('Registration successful! Check your email to verify your account.', 'success')
+
+            if require_approval:
+                flash(f'Account created ({auto_email}). An admin must approve it before you can sign in.', 'info')
+            else:
+                flash(f'Welcome! Your account {auto_email} was created. Check your email to verify.', 'success')
             return redirect(url_for('login'))
-            
+
         except Exception as e:
             db.session.rollback()
             logging.error(f"Registration error: {str(e)}")
             flash('Registration failed. Please try again.', 'error')
-    
-    return render_template('register.html', form=form)
+
+    return render_template('register.html', form=form, org_domain=org_domain, min_pw_len=min_pw_len)
 
 @app.route('/logout')
 @login_required
@@ -338,7 +361,8 @@ def admin_users():
         return redirect(url_for('index'))
     
     users = User.query.order_by(User.created_at.desc()).all()
-    return render_template('admin/users.html', users=users)
+    pending_count = sum(1 for u in users if not u.active)
+    return render_template('admin/users.html', users=users, pending_count=pending_count)
 
 @app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -372,6 +396,33 @@ def admin_edit_user(user_id):
         form.is_verified.data = user.is_verified
     
     return render_template('admin/edit_user.html', form=form, user=user)
+
+@app.route('/admin/users/<int:user_id>/approve', methods=['POST'])
+@login_required
+def admin_approve_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    user = User.query.get_or_404(user_id)
+    user.active = True
+    db.session.commit()
+    flash(f'Account for {user.username} ({user.email}) has been approved and activated.', 'success')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/users/<int:user_id>/deactivate', methods=['POST'])
+@login_required
+def admin_deactivate_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        flash('You cannot deactivate your own account.', 'error')
+        return redirect(url_for('admin_users'))
+    user.active = False
+    db.session.commit()
+    flash(f'Account for {user.username} has been deactivated.', 'info')
+    return redirect(url_for('admin_users'))
 
 # Security management routes
 @app.route('/admin/security')
@@ -1202,6 +1253,13 @@ def admin_settings():
     }
     firewall_rules = FirewallRule.query.order_by(FirewallRule.created_at.desc()).all()
     base_url = request.host_url.rstrip('/')
+    org = {
+        'domain': SystemConfig.get('org_domain', 'netlifegy.com'),
+        'registration_mode': SystemConfig.get('registration_mode', 'open'),
+        'require_approval': SystemConfig.get('require_account_approval', 'off') == 'on',
+    }
+    # Pending approval count
+    pending_users = User.query.filter_by(active=False).count()
     return render_template('admin/settings.html',
         maintenance_on=maintenance_on,
         maintenance_message=maintenance_message,
@@ -1209,7 +1267,9 @@ def admin_settings():
         policy=policy,
         stats=stats,
         firewall_rules=firewall_rules,
-        base_url=base_url)
+        base_url=base_url,
+        org=org,
+        pending_users=pending_users)
 
 
 @app.route('/admin/firewall/add', methods=['POST'])
@@ -1286,6 +1346,25 @@ def admin_save_policy():
     SystemConfig.set('require_email_verify', 'on' if request.form.get('require_email_verify') else 'off')
     flash('Security policy saved.', 'success')
     return redirect(url_for('admin_settings') + '#policy')
+
+
+@app.route('/admin/save-org', methods=['POST'])
+@login_required
+@security_check
+def admin_save_org():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    domain = request.form.get('org_domain', '').strip().lower()
+    if domain:
+        # Strip any leading '@' or 'username@' text if typed
+        if '@' in domain:
+            domain = domain.split('@')[-1]
+        SystemConfig.set('org_domain', domain)
+    SystemConfig.set('registration_mode', request.form.get('registration_mode', 'open'))
+    SystemConfig.set('require_account_approval', 'on' if request.form.get('require_account_approval') else 'off')
+    flash('Organization settings saved.', 'success')
+    return redirect(url_for('admin_settings') + '#org')
 
 
 # ── OAuth / SSO Admin Routes ──────────────────────────────────────────────────

@@ -1,180 +1,140 @@
 {% extends "base.html" %}
-
 {% block title %}User Management - Admin{% endblock %}
-
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>
-                <i data-feather="users" class="me-2"></i>
-                User Management
-            </h1>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
-                <i data-feather="arrow-left" class="me-2"></i>
-                Back to Admin
-            </a>
-        </div>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i data-feather="users" class="me-2"></i>User Management</h1>
+  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+    <i data-feather="arrow-left" class="me-2"></i>Back to Admin
+  </a>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i data-feather="list" class="me-2"></i>
-                    All Users ({{ users|length }})
-                </h5>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" onclick="filterUsers('all')">All</button>
-                    <button class="btn btn-outline-success" onclick="filterUsers('active')">Active</button>
-                    <button class="btn btn-outline-warning" onclick="filterUsers('admin')">Admins</button>
-                    <button class="btn btn-outline-info" onclick="filterUsers('verified')">Verified</button>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-secondary">
-                            <tr>
-                                <th>User</th>
-                                <th>Contact</th>
-                                <th>Joined</th>
-                                <th>Last Login</th>
-                                <th>Status</th>
-                                <th>Email Stats</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in users %}
-                            <tr class="user-row" data-status="{{ 'active' if user.active else 'inactive' }} {{ 'admin' if user.is_admin else '' }} {{ 'verified' if user.is_verified else '' }}">
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        {% if user.profile_photo %}
-                                            <img src="{{ url_for('static', filename='profile_pics/' + user.profile_photo) }}" 
-                                                 class="rounded-circle me-3" width="40" height="40" alt="Profile">
-                                        {% else %}
-                                            <div class="avatar-circle bg-primary text-white me-3">
-                                                {{ user.full_name[0].upper() if user.full_name else 'U' }}
-                                            </div>
-                                        {% endif %}
-                                        <div>
-                                            <div class="fw-medium">{{ user.full_name }}</div>
-                                            <small class="text-muted">@{{ user.username }}</small>
-                                            {% if user.location %}
-                                                <br><small class="text-muted">
-                                                    <i data-feather="map-pin" style="width: 0.7rem; height: 0.7rem;"></i>
-                                                    {{ user.location }}
-                                                </small>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div>{{ user.email }}</div>
-                                    {% if user.phone_number %}
-                                        <small class="text-muted">{{ user.phone_number }}</small>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <small>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'Unknown' }}</small>
-                                </td>
-                                <td>
-                                    {% if user.last_login %}
-                                        <small>{{ user.last_login.strftime('%Y-%m-%d %H:%M') }}</small>
-                                    {% else %}
-                                        <small class="text-muted">Never</small>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="d-flex flex-wrap gap-1">
-                                        {% if user.active %}
-                                            <span class="badge bg-success">Active</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">Inactive</span>
-                                        {% endif %}
-                                        {% if user.is_admin %}
-                                            <span class="badge bg-danger">Admin</span>
-                                        {% endif %}
-                                        {% if user.is_verified %}
-                                            <span class="badge bg-info">Verified</span>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                                <td>
-                                    <small class="text-muted">
-                                        <div>Sent: {{ user.emails_sent.count() }}</div>
-                                        <div>Received: {{ user.emails_received.count() }}</div>
-                                    </small>
-                                </td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" 
-                                           class="btn btn-outline-primary" title="Edit">
-                                            <i data-feather="edit" style="width: 0.8rem; height: 0.8rem;"></i>
-                                        </a>
-                                        {% if user.id != current_user.id %}
-                                        <button class="btn btn-outline-warning" 
-                                                onclick="toggleUserStatus({{ user.id }}, {{ 'false' if user.active else 'true' }})"
-                                                title="{{ 'Deactivate' if user.active else 'Activate' }}">
-                                            <i data-feather="{{ 'user-x' if user.active else 'user-check' }}" style="width: 0.8rem; height: 0.8rem;"></i>
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+{% if pending_count > 0 %}
+<div class="alert alert-warning d-flex align-items-center mb-4">
+  <i data-feather="clock" class="me-2"></i>
+  <div>
+    <strong>{{ pending_count }} account{{ 's' if pending_count != 1 }} awaiting approval.</strong>
+    Use the <strong>Approve</strong> button below to activate them.
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i data-feather="list" class="me-2"></i>All Users ({{ users|length }})</h5>
+    <div class="btn-group btn-group-sm">
+      <button class="btn btn-outline-secondary active" onclick="filterUsers('all', this)">All</button>
+      <button class="btn btn-outline-warning" onclick="filterUsers('pending', this)">Pending{% if pending_count %} <span class="badge bg-warning text-dark ms-1">{{ pending_count }}</span>{% endif %}</button>
+      <button class="btn btn-outline-success" onclick="filterUsers('active', this)">Active</button>
+      <button class="btn btn-outline-danger" onclick="filterUsers('admin', this)">Admins</button>
     </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-secondary">
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Joined</th>
+            <th>Last Login</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr class="user-row"
+              data-kind="{{ 'pending' if not user.active else 'active' }} {{ 'admin' if user.is_admin else '' }}">
+            <td>
+              <div class="d-flex align-items-center">
+                {% if user.profile_photo %}
+                  <img src="{{ url_for('static', filename='profile_pics/' + user.profile_photo) }}"
+                       class="rounded-circle me-3" width="40" height="40" alt="">
+                {% else %}
+                  <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
+                       style="width:40px;height:40px;font-size:1.1rem;flex-shrink:0;">
+                    {{ user.full_name[0].upper() if user.full_name else 'U' }}
+                  </div>
+                {% endif %}
+                <div>
+                  <div class="fw-semibold">{{ user.full_name }}</div>
+                  <small class="text-muted">@{{ user.username }}</small>
+                </div>
+              </div>
+            </td>
+            <td class="font-monospace small">{{ user.email }}</td>
+            <td><small>{{ user.created_at.strftime('%b %d, %Y') if user.created_at else '—' }}</small></td>
+            <td>
+              {% if user.last_login %}
+                <small>{{ user.last_login.strftime('%b %d, %Y') }}</small>
+              {% else %}
+                <small class="text-muted">Never</small>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-1">
+                {% if not user.active %}
+                  <span class="badge bg-warning text-dark">Pending</span>
+                {% else %}
+                  <span class="badge bg-success">Active</span>
+                {% endif %}
+                {% if user.is_admin %}<span class="badge bg-danger">Admin</span>{% endif %}
+                {% if user.is_verified %}<span class="badge bg-info">Verified</span>{% endif %}
+              </div>
+            </td>
+            <td class="text-end">
+              <div class="d-flex gap-1 justify-content-end">
+                <a href="{{ url_for('admin_edit_user', user_id=user.id) }}"
+                   class="btn btn-sm btn-outline-primary" title="Edit">
+                  <i data-feather="edit" style="width:14px;height:14px;"></i>
+                </a>
+                {% if user.id != current_user.id %}
+                  {% if not user.active %}
+                    <form method="POST" action="{{ url_for('admin_approve_user', user_id=user.id) }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-success" title="Approve account">
+                        <i data-feather="user-check" style="width:14px;height:14px;"></i> Approve
+                      </button>
+                    </form>
+                  {% else %}
+                    <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=user.id) }}" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn btn-sm btn-outline-warning" title="Deactivate"
+                              onclick="return confirm('Deactivate {{ user.username }}?')">
+                        <i data-feather="user-x" style="width:14px;height:14px;"></i>
+                      </button>
+                    </form>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function filterUsers(type) {
-    const rows = document.querySelectorAll('.user-row');
-    
-    rows.forEach(row => {
-        const status = row.dataset.status;
-        let show = false;
-        
-        switch(type) {
-            case 'all':
-                show = true;
-                break;
-            case 'active':
-                show = status.includes('active');
-                break;
-            case 'admin':
-                show = status.includes('admin');
-                break;
-            case 'verified':
-                show = status.includes('verified');
-                break;
-        }
-        
-        row.style.display = show ? '' : 'none';
-    });
-    
-    // Update button states
-    document.querySelectorAll('.btn-group button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    event.target.classList.add('active');
-}
-
-function toggleUserStatus(userId, activate) {
-    if (confirm(`Are you sure you want to ${activate ? 'activate' : 'deactivate'} this user?`)) {
-        // Here you would make an AJAX call to toggle user status
-        // For now, just reload the page
-        window.location.reload();
+function filterUsers(kind, btn) {
+  document.querySelectorAll('.user-row').forEach(row => {
+    const k = row.dataset.kind;
+    if (kind === 'all') {
+      row.style.display = '';
+    } else if (kind === 'pending') {
+      row.style.display = k.includes('pending') ? '' : 'none';
+    } else if (kind === 'active') {
+      row.style.display = k.includes('active') ? '' : 'none';
+    } else if (kind === 'admin') {
+      row.style.display = k.includes('admin') ? '' : 'none';
     }
+  });
+  document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
 }
+feather.replace();
 </script>
 {% endblock %}

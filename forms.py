@@ -12,10 +12,9 @@ class LoginForm(FlaskForm):
 
 class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[
-        DataRequired(), 
+        DataRequired(),
         Length(min=3, max=20, message='Username must be between 3 and 20 characters')
     ])
-    email = StringField('Email', validators=[DataRequired(), Email()])
     full_name = StringField('Full Name', validators=[
         DataRequired(),
         Length(min=2, max=100, message='Full name must be between 2 and 100 characters')
@@ -45,23 +44,26 @@ class RegistrationForm(FlaskForm):
     use_tls = BooleanField('Use TLS/SSL', default=True)
     password = PasswordField('Password', validators=[
         DataRequired(),
-        Length(min=6, message='Password must be at least 6 characters long')
+        Length(min=8, message='Password must be at least 8 characters long')
     ])
     password2 = PasswordField('Confirm Password', validators=[
         DataRequired(),
         EqualTo('password', message='Passwords must match')
     ])
-    submit = SubmitField('Register')
+    submit = SubmitField('Create Account')
 
     def validate_username(self, username):
+        import re
+        if not re.match(r'^[a-zA-Z0-9._-]+$', username.data):
+            raise ValidationError('Username may only contain letters, numbers, dots, hyphens, and underscores.')
         user = User.query.filter_by(username=username.data).first()
         if user:
             raise ValidationError('Username already taken. Please choose a different one.')
-
-    def validate_email(self, email):
-        user = User.query.filter_by(email=email.data).first()
-        if user:
-            raise ValidationError('Email already registered. Please choose a different one.')
+        from models import SystemConfig
+        domain = SystemConfig.get('org_domain', 'netlifegy.com')
+        auto_email = f"{username.data.lower()}@{domain}"
+        if User.query.filter_by(email=auto_email).first():
+            raise ValidationError('Username already taken. Please choose a different one.')
 
 class ProfileForm(FlaskForm):
     full_name = StringField('Full Name', validators=[

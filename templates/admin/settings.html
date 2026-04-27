@@ -55,6 +55,11 @@
           <i data-feather="activity" style="width:16px;height:16px;"></i> Security Logs
         </a>
 
+        <div class="admin-section">Organization</div>
+        <a class="nav-link" href="#" data-section="org">
+          <i data-feather="briefcase" style="width:16px;height:16px;"></i> Organization
+        </a>
+
         <div class="admin-section">System</div>
         <a class="nav-link" href="#" data-section="maintenance">
           <i data-feather="tool" style="width:16px;height:16px;"></i> Maintenance
@@ -441,6 +446,68 @@ $_SESSION['user'] = $user;</pre>
               <i data-feather="save" class="me-2"></i>Save Security Policy
             </button>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ORGANIZATION ══ -->
+    <div class="section-panel" id="panel-org">
+      <h4 class="mb-1 fw-bold"><i data-feather="briefcase" class="me-2"></i>Organization</h4>
+      <p class="text-muted mb-4">Control your domain, registration rules, and account policies.</p>
+
+      <div class="card">
+        <div class="card-body">
+          <form method="POST" action="{{ url_for('admin_save_org') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-4">
+              <div class="col-md-6">
+                <h6 class="text-muted text-uppercase small mb-3" style="letter-spacing:.08em;">Domain</h6>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Organization Domain</label>
+                  <div class="input-group">
+                    <span class="input-group-text">username@</span>
+                    <input type="text" name="org_domain" class="form-control font-monospace"
+                           value="{{ org.domain }}" placeholder="netlifegy.com">
+                  </div>
+                  <div class="form-text">All new accounts will get an email like <code>username@{{ org.domain }}</code>. No other email providers accepted.</div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <h6 class="text-muted text-uppercase small mb-3" style="letter-spacing:.08em;">Registration</h6>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Who can register?</label>
+                  <select name="registration_mode" class="form-select">
+                    <option value="open" {{ 'selected' if org.registration_mode == 'open' }}>Open — Anyone can create an account</option>
+                    <option value="closed" {{ 'selected' if org.registration_mode == 'closed' }}>Closed — No new registrations</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="require_account_approval" id="reqApproval"
+                           {{ 'checked' if org.require_approval }}>
+                    <label class="form-check-label fw-semibold" for="reqApproval">Require admin approval for new accounts</label>
+                  </div>
+                  <div class="form-text">New users will be inactive until an admin approves them in the Users panel.</div>
+                </div>
+              </div>
+            </div>
+            <hr>
+            <button type="submit" class="btn btn-primary">
+              <i data-feather="save" class="me-2"></i>Save Organization Settings
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-header"><h6 class="mb-0"><i data-feather="info" class="me-2"></i>What this does</h6></div>
+        <div class="card-body small text-muted">
+          <ul class="mb-0 ps-3">
+            <li class="mb-1">When a user registers with username <strong>john</strong>, their email becomes <strong>john@{{ org.domain }}</strong> automatically — no input required.</li>
+            <li class="mb-1">Users cannot type a different email address — only your domain is accepted.</li>
+            <li class="mb-1">If you close registration, the sign-up page shows a notice and redirects to login.</li>
+            <li>If approval is required, new accounts are locked until you activate them in the Users panel.</li>
+          </ul>
         </div>
       </div>
     </div>

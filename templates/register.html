@@ -1,187 +1,136 @@
 {% extends "base.html" %}
-
-{% block title %}Register - Email Server{% endblock %}
-
+{% block title %}Create Account{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6">
-        <div class="card">
-            <div class="card-header text-center">
-                <h4 class="mb-0">
-                    <i data-feather="user-plus" class="me-2"></i>
-                    Create Account
-                </h4>
+  <div class="col-md-8 col-lg-7">
+    <div class="card">
+      <div class="card-header text-center py-4">
+        <i data-feather="user-plus" style="width:32px;height:32px;" class="mb-2 d-block mx-auto text-primary"></i>
+        <h4 class="mb-0">Create Your Account</h4>
+        <small class="text-muted">Your email will be <strong id="email-preview">username@{{ org_domain }}</strong></small>
+      </div>
+
+      <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+          {{ form.hidden_tag() }}
+
+          <!-- ── Basic Info ── -->
+          <h6 class="text-muted text-uppercase small mb-3 mt-1" style="letter-spacing:.08em;">Basic Information</h6>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              {{ form.username.label(class="form-label") }}
+              <div class="input-group">
+                {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), id="username-field", placeholder="e.g. john") }}
+                <span class="input-group-text text-muted">@{{ org_domain }}</span>
+                {% if form.username.errors %}
+                  <div class="invalid-feedback">{% for e in form.username.errors %}{{ e }}{% endfor %}</div>
+                {% endif %}
+              </div>
+              <div class="form-text">Your email will be <strong id="live-email">…@{{ org_domain }}</strong></div>
             </div>
-            <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
-                    {{ form.hidden_tag() }}
-                    
-                    <!-- Basic Information -->
-                    <h5 class="mb-3">
-                        <i data-feather="user" class="me-2"></i>
-                        Basic Information
-                    </h5>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.username.label(class="form-label") }}
-                            {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else "")) }}
-                            {% if form.username.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.username.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.email.label(class="form-label") }}
-                            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
-                            {% if form.email.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.email.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.full_name.label(class="form-label") }}
-                        {{ form.full_name(class="form-control" + (" is-invalid" if form.full_name.errors else "")) }}
-                        {% if form.full_name.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.full_name.errors %}{{ error }}{% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.phone_number.label(class="form-label") }}
-                            {{ form.phone_number(class="form-control" + (" is-invalid" if form.phone_number.errors else "")) }}
-                            {% if form.phone_number.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.phone_number.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.location.label(class="form-label") }}
-                            {{ form.location(class="form-control" + (" is-invalid" if form.location.errors else "")) }}
-                            {% if form.location.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.location.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.bio.label(class="form-label") }}
-                        {{ form.bio(class="form-control" + (" is-invalid" if form.bio.errors else ""), rows="3") }}
-                        {% if form.bio.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.bio.errors %}{{ error }}{% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="mb-4">
-                        {{ form.profile_photo.label(class="form-label") }}
-                        {{ form.profile_photo(class="form-control" + (" is-invalid" if form.profile_photo.errors else "")) }}
-                        {% if form.profile_photo.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.profile_photo.errors %}{{ error }}{% endfor %}
-                            </div>
-                        {% endif %}
-                        <div class="form-text">Upload a profile photo (optional)</div>
-                    </div>
-                    
-                    <!-- Email Server Configuration -->
-                    <h5 class="mb-3">
-                        <i data-feather="server" class="me-2"></i>
-                        Email Server Configuration (Optional)
-                    </h5>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.smtp_server.label(class="form-label") }}
-                            {{ form.smtp_server(class="form-control", placeholder="smtp.gmail.com") }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.smtp_port.label(class="form-label") }}
-                            {{ form.smtp_port(class="form-control", placeholder="587") }}
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.smtp_username.label(class="form-label") }}
-                            {{ form.smtp_username(class="form-control", placeholder="your@email.com") }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.smtp_password.label(class="form-label") }}
-                            {{ form.smtp_password(class="form-control") }}
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.imap_server.label(class="form-label") }}
-                            {{ form.imap_server(class="form-control", placeholder="imap.gmail.com") }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.imap_port.label(class="form-label") }}
-                            {{ form.imap_port(class="form-control", placeholder="993") }}
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4 form-check">
-                        {{ form.use_tls(class="form-check-input") }}
-                        {{ form.use_tls.label(class="form-check-label") }}
-                    </div>
-                    
-                    <!-- Password -->
-                    <h5 class="mb-3">
-                        <i data-feather="lock" class="me-2"></i>
-                        Security
-                    </h5>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.password.label(class="form-label") }}
-                            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
-                            {% if form.password.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.password.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.password2.label(class="form-label") }}
-                            {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else "")) }}
-                            {% if form.password2.errors %}
-                                <div class="invalid-feedback">
-                                    {% for error in form.password2.errors %}{{ error }}{% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="d-grid">
-                        {{ form.submit(class="btn btn-primary btn-lg") }}
-                    </div>
-                </form>
-                
-                <hr class="my-4">
-                
-                <div class="text-center">
-                    <p class="mb-0">Already have an account?</p>
-                    <a href="{{ url_for('login') }}" class="btn btn-outline-secondary mt-2">
-                        <i data-feather="log-in" class="me-2"></i>
-                        Sign In
-                    </a>
-                </div>
+            <div class="col-md-6">
+              {{ form.full_name.label(class="form-label") }}
+              {{ form.full_name(class="form-control" + (" is-invalid" if form.full_name.errors else ""), placeholder="Your Full Name") }}
+              {% if form.full_name.errors %}
+                <div class="invalid-feedback">{% for e in form.full_name.errors %}{{ e }}{% endfor %}</div>
+              {% endif %}
             </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              {{ form.phone_number.label(class="form-label") }}
+              {{ form.phone_number(class="form-control", placeholder="+1 555 000 0000") }}
+            </div>
+            <div class="col-md-6">
+              {{ form.location.label(class="form-label") }}
+              {{ form.location(class="form-control", placeholder="City, Country") }}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            {{ form.bio.label(class="form-label") }}
+            {{ form.bio(class="form-control", rows="2", placeholder="A short bio (optional)") }}
+          </div>
+
+          <div class="mb-4">
+            {{ form.profile_photo.label(class="form-label") }}
+            {{ form.profile_photo(class="form-control") }}
+            <div class="form-text">JPG, PNG or GIF (optional)</div>
+          </div>
+
+          <!-- ── Password ── -->
+          <h6 class="text-muted text-uppercase small mb-3" style="letter-spacing:.08em;">Security</h6>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              {{ form.password.label(class="form-label") }}
+              {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+              <div class="form-text">Minimum {{ min_pw_len }} characters</div>
+              {% if form.password.errors %}
+                <div class="invalid-feedback">{% for e in form.password.errors %}{{ e }}{% endfor %}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              {{ form.password2.label(class="form-label") }}
+              {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else "")) }}
+              {% if form.password2.errors %}
+                <div class="invalid-feedback">{% for e in form.password2.errors %}{{ e }}{% endfor %}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- ── Email Server (collapsed) ── -->
+          <details class="mb-4">
+            <summary class="text-muted small" style="cursor:pointer;">
+              <i data-feather="server" style="width:13px;height:13px;" class="me-1"></i> Advanced — Email Server Settings (optional)
+            </summary>
+            <div class="row g-3 mt-2">
+              <div class="col-md-6">{{ form.smtp_server.label(class="form-label") }}{{ form.smtp_server(class="form-control", placeholder="smtp.gmail.com") }}</div>
+              <div class="col-md-6">{{ form.smtp_port.label(class="form-label") }}{{ form.smtp_port(class="form-control", placeholder="587") }}</div>
+              <div class="col-md-6">{{ form.smtp_username.label(class="form-label") }}{{ form.smtp_username(class="form-control") }}</div>
+              <div class="col-md-6">{{ form.smtp_password.label(class="form-label") }}{{ form.smtp_password(class="form-control") }}</div>
+              <div class="col-md-6">{{ form.imap_server.label(class="form-label") }}{{ form.imap_server(class="form-control", placeholder="imap.gmail.com") }}</div>
+              <div class="col-md-6">{{ form.imap_port.label(class="form-label") }}{{ form.imap_port(class="form-control", placeholder="993") }}</div>
+              <div class="col-12">
+                <div class="form-check">{{ form.use_tls(class="form-check-input") }}{{ form.use_tls.label(class="form-check-label") }}</div>
+              </div>
+            </div>
+          </details>
+
+          <div class="alert alert-info py-2 small mb-3">
+            <i data-feather="shield" style="width:14px;height:14px;" class="me-1"></i>
+            Your account email will be <strong id="alert-email">…@{{ org_domain }}</strong> — no external providers accepted.
+          </div>
+
+          <div class="d-grid">
+            {{ form.submit(class="btn btn-primary btn-lg") }}
+          </div>
+        </form>
+
+        <hr class="my-4">
+        <div class="text-center">
+          <p class="mb-0 text-muted">Already have an account?</p>
+          <a href="{{ url_for('login') }}" class="btn btn-outline-secondary mt-2">
+            <i data-feather="log-in" class="me-2"></i>Sign In
+          </a>
         </div>
+      </div>
     </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const domain = '{{ org_domain }}';
+document.getElementById('username-field').addEventListener('input', function() {
+  const u = this.value.toLowerCase().trim() || '…';
+  const email = u + '@' + domain;
+  document.getElementById('live-email').textContent = email;
+  document.getElementById('alert-email').textContent = email;
+});
+feather.replace();
+</script>
 {% endblock %}
