@@ -21,13 +21,18 @@
             <div class="col-md-6">
               {{ form.username.label(class="form-label") }}
               <div class="input-group">
-                {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), id="username-field", placeholder="e.g. john") }}
+                {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), id="username-field", placeholder="e.g. john", autocomplete="username") }}
                 <span class="input-group-text text-muted">@{{ org_domain }}</span>
                 {% if form.username.errors %}
                   <div class="invalid-feedback">{% for e in form.username.errors %}{{ e }}{% endfor %}</div>
                 {% endif %}
               </div>
-              <div class="form-text">Your email will be <strong id="live-email">…@{{ org_domain }}</strong></div>
+              <div class="form-text d-flex align-items-center gap-2">
+                Your email will be <strong id="live-email">…@{{ org_domain }}</strong>
+                <span id="suggest-badge" class="badge bg-primary bg-opacity-25 text-primary" style="display:none;font-size:.65rem;">
+                  <i data-feather="cpu" style="width:10px;height:10px;" class="me-1"></i>Suggested
+                </span>
+              </div>
             </div>
             <div class="col-md-6">
               {{ form.full_name.label(class="form-label") }}
@@ -125,12 +130,51 @@
 {% block scripts %}
 <script>
 const domain = '{{ org_domain }}';
-document.getElementById('username-field').addEventListener('input', function() {
-  const u = this.value.toLowerCase().trim() || '…';
-  const email = u + '@' + domain;
-  document.getElementById('live-email').textContent = email;
-  document.getElementById('alert-email').textContent = email;
+const usernameField = document.getElementById('username-field');
+const liveEmail    = document.getElementById('live-email');
+const alertEmail   = document.getElementById('alert-email');
+const suggestBadge = document.getElementById('suggest-badge');
+
+let autoFilled = false; // tracks whether we auto-filled the username
+
+function toUsername(name) {
+  return name
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // strip accents
+    .replace(/[^a-z0-9.\-_\s]/g, '')  // keep allowed chars + space
+    .trim()
+    .replace(/\s+/g, '.')             // spaces → dots
+    .replace(/\.{2,}/g, '.')          // collapse multiple dots
+    .replace(/^[.\-_]+|[.\-_]+$/g, '') // trim leading/trailing punctuation
+    .substring(0, 20);
+}
+
+function updateEmailPreview(u) {
+  const display = (u || '…') + '@' + domain;
+  liveEmail.textContent  = display;
+  alertEmail.textContent = display;
+}
+
+// Full-name field drives suggestion
+document.getElementById('full_name').addEventListener('input', function() {
+  const suggestion = toUsername(this.value);
+  if (!suggestion) return;
+  // Auto-fill only if user hasn't typed their own username yet
+  if (autoFilled || usernameField.value === '') {
+    usernameField.value = suggestion;
+    autoFilled = true;
+    if (suggestBadge) suggestBadge.style.display = '';
+    updateEmailPreview(suggestion);
+  }
 });
+
+// User manually editing username → stop auto-filling
+usernameField.addEventListener('input', function() {
+  autoFilled = false;
+  if (suggestBadge) suggestBadge.style.display = 'none';
+  updateEmailPreview(this.value.toLowerCase().trim());
+});
+
 feather.replace();
 </script>
 {% endblock %}
