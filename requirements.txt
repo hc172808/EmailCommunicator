@@ -1,3 +1,4 @@
+python-dotenv==1.0.1
 Flask==3.1.0
 Flask-Login==0.6.3
 Flask-SQLAlchemy==3.1.1
@@ -18,3 +19,4 @@ qrcode==8.1
 PyJWT==2.10.1
 dnspython==2.7.0
 requests==2.32.3
+python-dotenv

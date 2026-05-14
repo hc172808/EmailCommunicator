@@ -450,6 +450,7 @@ def admin_edit_user(user_id):
         user.is_verified = form.is_verified.data
         
         db.session.commit()
+        _audit('edit_user', 'user', user.id, f'{user.username} — active={user.active} admin={user.is_admin}')
         flash(f'User {user.username} has been updated!', 'success')
         return redirect(url_for('admin_users'))
     
@@ -472,6 +473,7 @@ def admin_approve_user(user_id):
     user = User.query.get_or_404(user_id)
     user.active = True
     db.session.commit()
+    _audit('approve_user', 'user', user.id, f'{user.username} ({user.email})')
     flash(f'Account for {user.username} ({user.email}) has been approved and activated.', 'success')
     return redirect(url_for('admin_users'))
 
@@ -487,6 +489,7 @@ def admin_deactivate_user(user_id):
         return redirect(url_for('admin_users'))
     user.active = False
     db.session.commit()
+    _audit('deactivate_user', 'user', user.id, f'{user.username} ({user.email})')
     flash(f'Account for {user.username} has been deactivated.', 'info')
     return redirect(url_for('admin_users'))
 
@@ -520,6 +523,7 @@ def admin_unban_ip(ip_address):
         return redirect(url_for('index'))
     
     if security_manager.unban_ip(ip_address):
+        _audit('unban_ip', 'ip', None, ip_address)
         flash(f'IP address {ip_address} has been unbanned.', 'success')
     else:
         flash(f'IP address {ip_address} was not found in ban list.', 'error')
@@ -542,6 +546,7 @@ def admin_ban_ip():
     
     if ip_address:
         security_manager.ban_ip(ip_address, reason, ban_type, duration)
+        _audit('ban_ip', 'ip', None, f'{ip_address} — {reason} ({ban_type}, {duration}h)')
         flash(f'IP address {ip_address} has been banned.', 'success')
     else:
         flash('IP address is required.', 'error')
@@ -1053,9 +1058,11 @@ def admin_toggle_maintenance():
         SystemConfig.set('maintenance_mode', 'on')
         SystemConfig.set('maintenance_message', message)
         SystemConfig.set('maintenance_features', features_raw)
+        _audit('maintenance_enable', 'system', None, message[:120] if message else None)
         flash('Maintenance mode is now ON. Regular users will see the maintenance page.', 'warning')
     elif action == 'disable':
         SystemConfig.set('maintenance_mode', 'off')
+        _audit('maintenance_disable', 'system', None, None)
         flash('Maintenance mode is now OFF. The site is live for all users.', 'success')
     return redirect(url_for('admin_dashboard'))
 
@@ -1382,6 +1389,7 @@ def admin_firewall_add():
                         description=description, created_by=current_user.id)
     db.session.add(rule)
     db.session.commit()
+    _audit('firewall_add', 'firewall_rule', rule.id, f'{rule_type.upper()} {ip_or_cidr} — {description}')
     flash(f'Firewall rule added: {rule_type.upper()} {ip_or_cidr}', 'success')
     return redirect(url_for('admin_settings') + '#firewall')
 
@@ -1396,6 +1404,7 @@ def admin_firewall_toggle(rule_id):
     rule = FirewallRule.query.get_or_404(rule_id)
     rule.is_active = not rule.is_active
     db.session.commit()
+    _audit('firewall_toggle', 'firewall_rule', rule_id, f'{"activated" if rule.is_active else "paused"} {rule.ip_or_cidr}')
     flash(f'Rule {"activated" if rule.is_active else "paused"}.', 'success')
     return redirect(url_for('admin_settings') + '#firewall')
 
@@ -1408,6 +1417,7 @@ def admin_firewall_delete(rule_id):
         flash('Access denied.', 'error')
         return redirect(url_for('index'))
     rule = FirewallRule.query.get_or_404(rule_id)
+    _audit('firewall_delete', 'firewall_rule', rule_id, f'{rule.rule_type.upper()} {rule.ip_or_cidr}')
     db.session.delete(rule)
     db.session.commit()
     flash('Firewall rule deleted.', 'success')
@@ -1428,6 +1438,7 @@ def admin_save_policy():
             SystemConfig.set(f, val)
     SystemConfig.set('require_2fa', 'on' if request.form.get('require_2fa') else 'off')
     SystemConfig.set('require_email_verify', 'on' if request.form.get('require_email_verify') else 'off')
+    _audit('update_security_policy', 'system', None, None)
     flash('Security policy saved.', 'success')
     return redirect(url_for('admin_settings') + '#policy')
 
@@ -1447,6 +1458,7 @@ def admin_save_org():
         SystemConfig.set('org_domain', domain)
     SystemConfig.set('registration_mode', request.form.get('registration_mode', 'open'))
     SystemConfig.set('require_account_approval', 'on' if request.form.get('require_account_approval') else 'off')
+    _audit('update_org_settings', 'system', None, f'domain={domain}')
     flash('Organization settings saved.', 'success')
     return redirect(url_for('admin_settings') + '#org')
 
@@ -1507,6 +1519,7 @@ def admin_regenerate_oauth_secret(app_id):
     app_record = OAuthApp.query.get_or_404(app_id)
     app_record.client_secret = _secrets.token_urlsafe(64)
     db.session.commit()
+    _audit('oauth_secret_regenerated', 'app', app_id, app_record.name)
     flash('Client secret regenerated. Update your integration immediately.', 'warning')
     return redirect(url_for('admin_oauth_apps'))
 
@@ -1523,6 +1536,7 @@ def admin_toggle_oauth_app(app_id):
     app_record.is_active = not app_record.is_active
     db.session.commit()
     status = 'activated' if app_record.is_active else 'deactivated'
+    _audit(f'oauth_app_{status}', 'app', app_id, app_record.name)
     flash(f'"{app_record.name}" has been {status}.', 'success')
     return redirect(url_for('admin_oauth_apps'))
 
@@ -1537,6 +1551,7 @@ def admin_delete_oauth_app(app_id):
     from models import OAuthApp
     app_record = OAuthApp.query.get_or_404(app_id)
     name = app_record.name
+    _audit('oauth_app_deleted', 'app', app_id, name)
     db.session.delete(app_record)
     db.session.commit()
     flash(f'"{name}" has been deleted.', 'success')

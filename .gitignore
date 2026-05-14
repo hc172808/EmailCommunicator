@@ -1,0 +1,57 @@
+# Environment & secrets — NEVER commit these
+.env
+*.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pythonlibs/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Database files (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Uploads & user-generated content
+static/profile_pics/*
+!static/profile_pics/.gitkeep
+static/releases/*.apk
+static/releases/*.ipa
+static/releases/*.zip
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+# (keep Dockerfile and docker-compose.yml but ignore local override)
+docker-compose.override.yml
+
+# Backups
+backups/
+*.bak
