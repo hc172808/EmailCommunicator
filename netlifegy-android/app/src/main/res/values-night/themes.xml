@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NetlifegyMail" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#6366f1</item>
+        <item name="colorPrimaryVariant">#4f46e5</item>
+        <item name="colorOnPrimary">#ffffff</item>
+        <item name="colorSecondary">#818cf8</item>
+        <item name="colorOnSecondary">#ffffff</item>
+        <item name="android:statusBarColor">#0d1117</item>
+        <item name="android:navigationBarColor">#0d1117</item>
+        <item name="android:windowBackground">#0d1117</item>
+    </style>
+
+    <style name="Theme.NetlifegyMail.Splash" parent="Theme.NetlifegyMail">
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>

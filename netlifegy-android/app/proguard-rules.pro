@@ -1,0 +1,3 @@
+-keep class com.netlifegy.mail.** { *; }
+-keepattributes *Annotation*
+-keepattributes SourceFile,LineNumberTable

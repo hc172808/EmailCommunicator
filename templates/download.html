@@ -148,6 +148,38 @@
   </div>
 </section>
 
+<!-- Developer / source project section -->
+<section class="py-4" style="border-top:1px solid rgba(255,255,255,.07);">
+  <div class="container">
+    <h5 class="text-white fw-bold mb-3 text-center">
+      <i data-feather="code" style="width:18px;height:18px;color:#6366f1;" class="me-2"></i>Build It Yourself
+    </h5>
+    <div class="row g-3 justify-content-center">
+      <div class="col-md-8">
+        <div class="platform-card p-4 d-flex align-items-center gap-3" style="background:#111827;">
+          <div class="icon-wrap flex-shrink-0" style="background:rgba(34,197,94,.12);width:60px;height:60px;">
+            <i data-feather="code" style="width:30px;height:30px;color:#22c55e;"></i>
+          </div>
+          <div class="flex-grow-1">
+            <div class="fw-bold text-white mb-1">Android Studio Project</div>
+            <div class="text-muted small mb-2">Complete Kotlin + WebView source code. Open in Android Studio, change the URL to your domain, click Build → Generate APK. Works on Android 7.0+.</div>
+            <div class="d-flex gap-2 flex-wrap">
+              <span class="badge bg-dark border border-secondary text-muted">Kotlin</span>
+              <span class="badge bg-dark border border-secondary text-muted">Android 7+</span>
+              <span class="badge bg-dark border border-secondary text-muted">WebView</span>
+              <span class="badge bg-dark border border-secondary text-muted">Offline support</span>
+            </div>
+          </div>
+          <a href="{{ url_for('download_android_project') }}"
+             class="btn btn-success px-4 py-2 fw-semibold flex-shrink-0">
+            <i data-feather="download" class="me-2"></i>Download ZIP
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Footer -->
 <footer class="text-center py-4 mt-4" style="border-top:1px solid rgba(255,255,255,.07);">
   <p class="text-muted small mb-0">Netlifegy Mail · <a href="/" class="text-muted">netlifegy.com</a></p>

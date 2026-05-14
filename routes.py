@@ -1563,6 +1563,18 @@ def download_release(release_id):
                                as_attachment=True,
                                download_name=rel.original_name or rel.filename)
 
+@app.route('/download/android-studio-project')
+def download_android_project():
+    """Download the pre-built Android Studio project ZIP."""
+    from flask import send_from_directory
+    zip_path = os.path.join(RELEASES_DIR, 'netlifegy-android-studio.zip')
+    if not os.path.exists(zip_path):
+        flash('Android Studio project file not found.', 'error')
+        return redirect(url_for('download_page'))
+    return send_from_directory(RELEASES_DIR, 'netlifegy-android-studio.zip',
+                               as_attachment=True,
+                               download_name='NetlifegyMail-AndroidStudio.zip')
+
 @app.route('/api/app/version')
 @csrf.exempt
 def api_app_version():
