@@ -1561,7 +1561,11 @@ def admin_delete_oauth_app(app_id):
 # ── Developer Portal ─────────────────────────────────────────────────────────
 
 @app.route('/developers')
+@login_required
 def developers():
+    if not current_user.is_admin:
+        flash('Access denied. Developer portal is for admins only.', 'error')
+        return redirect(url_for('index'))
     base_url = request.host_url.rstrip('/')
     return render_template('developers.html', base_url=base_url)
 
@@ -1569,6 +1573,9 @@ def developers():
 @app.route('/developers/apps')
 @login_required
 def developer_my_apps():
+    if not current_user.is_admin:
+        flash('Access denied. Developer portal is for admins only.', 'error')
+        return redirect(url_for('index'))
     from models import OAuthApp
     my_apps = OAuthApp.query.filter_by(created_by=current_user.id).order_by(OAuthApp.created_at.desc()).all()
     base_url = request.host_url.rstrip('/')
@@ -1578,6 +1585,9 @@ def developer_my_apps():
 @app.route('/developers/apps/register', methods=['GET', 'POST'])
 @login_required
 def developer_register_app():
+    if not current_user.is_admin:
+        flash('Access denied. Developer portal is for admins only.', 'error')
+        return redirect(url_for('index'))
     from models import OAuthApp
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
