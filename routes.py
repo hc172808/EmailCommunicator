@@ -26,7 +26,7 @@ email_service = EmailService()
 # ── Maintenance mode middleware ────────────────────────────────────────────────
 
 MAINTENANCE_BYPASS_ROUTES = {'login', 'logout', 'static', 'maintenance_page',
-                              'admin_toggle_maintenance',
+                              'admin_toggle_maintenance', 'pwa_sw', 'pwa_offline',
                               'oauth_authorize', 'oauth_token', 'oauth_userinfo',
                               'oauth_discovery', 'oauth_widget'}
 
@@ -1537,3 +1537,18 @@ def not_found_error(error):
 def internal_error(error):
     db.session.rollback()
     return render_template('base.html', error_message='Internal server error'), 500
+
+# ── PWA routes ─────────────────────────────────────────────────────────────────
+
+@app.route('/sw.js')
+def pwa_sw():
+    """Serve service worker from root scope (required by browsers)."""
+    from flask import send_from_directory
+    response = send_from_directory('static', 'sw.js')
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
+
+@app.route('/offline')
+def pwa_offline():
+    return render_template('offline.html')
