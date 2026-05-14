@@ -149,6 +149,78 @@
             </div>
         </div>
 
+        <!-- Change Password -->
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center">
+                <h5 class="mb-0"><i data-feather="lock" class="me-2"></i>Change Password</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('change_password') }}">
+                    {{ pw_form.hidden_tag() }}
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            {{ pw_form.current_password.label(class="form-label") }}
+                            {{ pw_form.current_password(class="form-control", autocomplete="current-password") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ pw_form.new_password.label(class="form-label") }}
+                            {{ pw_form.new_password(class="form-control", autocomplete="new-password") }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ pw_form.new_password2.label(class="form-label") }}
+                            {{ pw_form.new_password2(class="form-control", autocomplete="new-password") }}
+                        </div>
+                        <div class="col-12">
+                            {{ pw_form.submit(class="btn btn-warning") }}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Active Sessions -->
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h5 class="mb-0"><i data-feather="monitor" class="me-2"></i>Active Sessions</h5>
+                {% if active_sessions|length > 1 %}
+                <form method="POST" action="{{ url_for('revoke_all_sessions') }}" onsubmit="return confirm('Revoke all other sessions?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-sm btn-outline-danger">Sign out all other devices</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                {% for s in active_sessions %}
+                <li class="list-group-item d-flex align-items-center justify-content-between gap-3 py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <i data-feather="{{ 'smartphone' if 'Mobile' in s.browser_display() else 'monitor' }}"
+                           class="text-{% if loop.first %}success{% else %}muted{% endif %}"
+                           style="width:20px;height:20px;flex-shrink:0;"></i>
+                        <div>
+                            <div class="fw-semibold small">{{ s.browser_display() }}
+                                {% if loop.first %}<span class="badge bg-success ms-1">Current</span>{% endif %}
+                            </div>
+                            <div class="text-muted" style="font-size:.75rem;">
+                                {{ s.ip_address or 'Unknown IP' }} ·
+                                Last seen {{ s.last_seen.strftime('%b %d %H:%M') if s.last_seen else 'Unknown' }}
+                            </div>
+                        </div>
+                    </div>
+                    {% if not loop.first %}
+                    <form method="POST" action="{{ url_for('revoke_session', session_id=s.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm btn-outline-danger">Revoke</button>
+                    </form>
+                    {% endif %}
+                </li>
+                {% else %}
+                <li class="list-group-item text-muted text-center py-3">No active sessions found.</li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+
         <!-- Edit Profile Form -->
         <div class="card">
             <div class="card-header">

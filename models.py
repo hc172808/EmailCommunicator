@@ -354,6 +354,58 @@ class APIToken(db.Model):
         }
 
 
+class UserSession(db.Model):
+    """Tracks active login sessions per user."""
+    __tablename__ = 'user_sessions'
+
+    id          = db.Column(Integer, primary_key=True)
+    user_id     = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    session_token = db.Column(String(64), unique=True, nullable=False, default=lambda: secrets.token_hex(32))
+    ip_address  = db.Column(String(45))
+    user_agent  = db.Column(String(512))
+    created_at  = db.Column(DateTime, default=datetime.utcnow)
+    last_seen   = db.Column(DateTime, default=datetime.utcnow)
+    is_active   = db.Column(Boolean, default=True)
+
+    user = db.relationship('User', backref=db.backref('sessions', lazy='dynamic'))
+
+    def browser_display(self):
+        ua = self.user_agent or ''
+        if 'Mobile' in ua or 'Android' in ua:
+            device = 'Mobile'
+        elif 'Tablet' in ua or 'iPad' in ua:
+            device = 'Tablet'
+        else:
+            device = 'Desktop'
+        if 'Chrome' in ua:
+            browser = 'Chrome'
+        elif 'Firefox' in ua:
+            browser = 'Firefox'
+        elif 'Safari' in ua:
+            browser = 'Safari'
+        elif 'Edge' in ua:
+            browser = 'Edge'
+        else:
+            browser = 'Browser'
+        return f'{browser} on {device}'
+
+
+class AdminAuditLog(db.Model):
+    """Records all significant admin actions."""
+    __tablename__ = 'admin_audit_log'
+
+    id          = db.Column(Integer, primary_key=True)
+    admin_id    = db.Column(Integer, db.ForeignKey('users.id'), nullable=False)
+    action      = db.Column(String(128), nullable=False)
+    target_type = db.Column(String(64))   # 'user', 'app', 'system', etc.
+    target_id   = db.Column(Integer)
+    details     = db.Column(Text)
+    ip_address  = db.Column(String(45))
+    created_at  = db.Column(DateTime, default=datetime.utcnow)
+
+    admin = db.relationship('User', foreign_keys=[admin_id])
+
+
 class AppRelease(db.Model):
     """Stores mobile app releases (APK / IPA) uploaded by admins."""
     __tablename__ = 'app_releases'

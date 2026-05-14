@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Audit Log – Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h2 class="mb-1 fw-bold"><i data-feather="clipboard" class="me-2 text-primary"></i>Admin Audit Log</h2>
+    <p class="text-muted mb-0">Every significant admin action recorded automatically.</p>
+  </div>
+  <form class="d-flex gap-2" method="GET">
+    <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search actions…" style="width:200px;">
+    <button class="btn btn-outline-secondary btn-sm">Search</button>
+    {% if q %}<a href="{{ url_for('admin_audit_log') }}" class="btn btn-outline-danger btn-sm">Clear</a>{% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th style="width:160px;">When</th>
+          <th style="width:120px;">Admin</th>
+          <th>Action</th>
+          <th>Target</th>
+          <th>Details</th>
+          <th style="width:120px;">IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in logs.items %}
+        <tr>
+          <td class="text-muted small">
+            {{ entry.created_at.strftime('%b %d %H:%M') }}<br>
+            <span style="font-size:.7rem;">{{ entry.created_at.strftime('%Y') }}</span>
+          </td>
+          <td>
+            <span class="fw-semibold">{{ entry.admin.username if entry.admin else '?' }}</span>
+          </td>
+          <td>
+            {% set color = 'danger' if 'delete' in entry.action or 'ban' in entry.action or 'deactivate' in entry.action
+                      else 'success' if 'approve' in entry.action or 'create' in entry.action
+                      else 'warning' if 'update' in entry.action or 'change' in entry.action
+                      else 'secondary' %}
+            <span class="badge bg-{{ color }} bg-opacity-25 text-{{ color }}">{{ entry.action }}</span>
+          </td>
+          <td class="text-muted small">
+            {% if entry.target_type %}{{ entry.target_type }}{% if entry.target_id %} #{{ entry.target_id }}{% endif %}{% else %}—{% endif %}
+          </td>
+          <td class="text-muted small">{{ entry.details or '—' }}</td>
+          <td class="text-muted small">{{ entry.ip_address or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-5">No audit log entries yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if logs.pages > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <small class="text-muted">{{ logs.total }} entries · page {{ logs.page }} of {{ logs.pages }}</small>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        {% if logs.has_prev %}
+        <li class="page-item"><a class="page-link" href="?page={{ logs.prev_num }}{% if q %}&q={{ q }}{% endif %}">‹</a></li>
+        {% endif %}
+        {% for p in logs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if p %}
+            <li class="page-item {% if p == logs.page %}active{% endif %}">
+              <a class="page-link" href="?page={{ p }}{% if q %}&q={{ q }}{% endif %}">{{ p }}</a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        {% if logs.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ logs.next_num }}{% if q %}&q={{ q }}{% endif %}">›</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

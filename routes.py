@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db, csrf
-from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig, FirewallRule, AppRelease
+from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig, FirewallRule, AppRelease, UserSession, AdminAuditLog
 from email_service import EmailService
 from identity_emails import send_verification_email, send_password_reset_email
 from forms import (LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm,
@@ -142,8 +142,12 @@ def login():
             
             login_user(user, remember=form.remember_me.data)
             user.last_login = datetime.utcnow()
+            tok = secrets.token_hex(32)
+            session['session_token'] = tok
+            db.session.add(UserSession(user_id=user.id, session_token=tok,
+                ip_address=_client_ip(), user_agent=request.user_agent.string))
             db.session.commit()
-            
+
             next_page = session.pop('oauth_next', None) or request.args.get('next')
             if not next_page or (not next_page.startswith('/') and 'oauth/authorize' not in next_page):
                 next_page = url_for('index')
@@ -266,6 +270,22 @@ def index():
                          draft_emails=draft_emails,
                          recent_emails=recent_emails)
 
+def _audit(action, target_type=None, target_id=None, details=None):
+    """Helper to write an admin audit log entry."""
+    try:
+        entry = AdminAuditLog(
+            admin_id=current_user.id,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            details=details,
+            ip_address=_client_ip(),
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception as e:
+        logging.warning(f"Audit log write failed: {e}")
+
 # Profile management routes
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -316,7 +336,52 @@ def profile():
         form.imap_port.data = str(current_user.imap_port) if current_user.imap_port else ''
         form.use_tls.data = current_user.use_tls
     
-    return render_template('profile.html', form=form)
+    pw_form = ChangePasswordForm(prefix='pw')
+    active_sessions = UserSession.query.filter_by(user_id=current_user.id, is_active=True)\
+                                       .order_by(UserSession.last_seen.desc()).all()
+    return render_template('profile.html', form=form, pw_form=pw_form, active_sessions=active_sessions)
+
+
+@app.route('/profile/change-password', methods=['POST'])
+@login_required
+def change_password():
+    pw_form = ChangePasswordForm(prefix='pw')
+    if pw_form.validate_on_submit():
+        if not current_user.check_password(pw_form.current_password.data):
+            flash('Current password is incorrect.', 'error')
+        else:
+            current_user.set_password(pw_form.new_password.data)
+            db.session.commit()
+            flash('Password changed successfully.', 'success')
+    else:
+        for field, errs in pw_form.errors.items():
+            for e in errs:
+                flash(e, 'error')
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/sessions/<int:session_id>/revoke', methods=['POST'])
+@login_required
+def revoke_session(session_id):
+    s = UserSession.query.filter_by(id=session_id, user_id=current_user.id).first_or_404()
+    s.is_active = False
+    db.session.commit()
+    flash('Session revoked.', 'success')
+    return redirect(url_for('profile'))
+
+
+@app.route('/profile/sessions/revoke-all', methods=['POST'])
+@login_required
+def revoke_all_sessions():
+    current_token = session.get('session_token')
+    UserSession.query.filter(
+        UserSession.user_id == current_user.id,
+        UserSession.is_active == True,
+        UserSession.session_token != current_token
+    ).update({'is_active': False})
+    db.session.commit()
+    flash('All other sessions have been revoked.', 'success')
+    return redirect(url_for('profile'))
 
 # Admin routes
 @app.route('/admin')
@@ -857,23 +922,36 @@ def compose():
     return render_template('compose.html')
 
 @app.route('/inbox')
+@login_required
 def inbox():
-    """View received emails"""
-    # Attempt to fetch new emails
+    page = request.args.get('page', 1, type=int)
+    q    = request.args.get('q', '').strip()
     try:
         email_service.fetch_emails()
     except Exception as e:
         logging.error(f"Error fetching emails: {str(e)}")
-        flash(f'Error fetching new emails: {str(e)}', 'warning')
-    
-    emails = Email.query.filter_by(is_received=True).order_by(Email.created_at.desc()).all()
-    return render_template('inbox.html', emails=emails)
+
+    query = Email.query.filter_by(is_received=True)
+    if q:
+        query = query.filter(
+            db.or_(Email.sender.ilike(f'%{q}%'), Email.subject.ilike(f'%{q}%'),
+                   Email.body_text.ilike(f'%{q}%'))
+        )
+    emails = query.order_by(Email.created_at.desc()).paginate(page=page, per_page=25, error_out=False)
+    return render_template('inbox.html', emails=emails, q=q)
 
 @app.route('/sent')
+@login_required
 def sent():
-    """View sent emails"""
-    emails = Email.query.filter_by(is_sent=True).order_by(Email.sent_at.desc()).all()
-    return render_template('sent.html', emails=emails)
+    page = request.args.get('page', 1, type=int)
+    q    = request.args.get('q', '').strip()
+    query = Email.query.filter_by(is_sent=True)
+    if q:
+        query = query.filter(
+            db.or_(Email.recipient.ilike(f'%{q}%'), Email.subject.ilike(f'%{q}%'))
+        )
+    emails = query.order_by(Email.sent_at.desc()).paginate(page=page, per_page=25, error_out=False)
+    return render_template('sent.html', emails=emails, q=q)
 
 @app.route('/email/<int:email_id>')
 def email_detail(email_id):
@@ -897,10 +975,11 @@ def delete_email(email_id):
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/drafts')
+@login_required
 def drafts():
-    """View draft emails"""
-    emails = Email.query.filter_by(is_draft=True).order_by(Email.created_at.desc()).all()
-    return render_template('sent.html', emails=emails, page_title='Drafts')
+    page   = request.args.get('page', 1, type=int)
+    emails = Email.query.filter_by(is_draft=True).order_by(Email.created_at.desc()).paginate(page=page, per_page=25, error_out=False)
+    return render_template('sent.html', emails=emails, page_title='Drafts', q='')
 
 @app.route('/draft/<int:email_id>/edit')
 def edit_draft(email_id):
@@ -1139,6 +1218,10 @@ def two_factor_verify():
             session.pop('pending_2fa_user_id', None)
             login_user(user, remember=remember)
             user.last_login = datetime.utcnow()
+            tok = secrets.token_hex(32)
+            session['session_token'] = tok
+            db.session.add(UserSession(user_id=user.id, session_token=tok,
+                ip_address=_client_ip(), user_agent=request.user_agent.string))
             db.session.commit()
             flash(f'Welcome back, {user.full_name}!', 'success')
             return redirect(url_for('index'))
@@ -1588,6 +1671,24 @@ def api_app_version():
         'android': android.to_dict() if android else None,
         'ios':     ios.to_dict()     if ios else None,
     })
+
+@app.route('/admin/audit-log')
+@login_required
+def admin_audit_log():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    q    = request.args.get('q', '').strip()
+    page = request.args.get('page', 1, type=int)
+    query = AdminAuditLog.query
+    if q:
+        query = query.filter(
+            db.or_(AdminAuditLog.action.ilike(f'%{q}%'),
+                   AdminAuditLog.details.ilike(f'%{q}%'),
+                   AdminAuditLog.target_type.ilike(f'%{q}%'))
+        )
+    logs = query.order_by(AdminAuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    return render_template('admin/audit_log.html', logs=logs, q=q)
 
 @app.route('/admin/app-releases')
 @login_required
