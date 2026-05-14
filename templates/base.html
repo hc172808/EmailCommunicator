@@ -99,6 +99,9 @@
                             <li><a class="dropdown-item" href="{{ url_for('admin_oauth_apps') }}">
                                 <i data-feather="link" class="me-2"></i>SSO Apps
                             </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin_app_releases') }}">
+                                <i data-feather="smartphone" class="me-2"></i>App Releases
+                            </a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -238,8 +241,46 @@
       window.addEventListener('appinstalled', () => {
         if (banner) banner.classList.add('d-none');
       });
+
+      // Check for admin-pushed APK update (once per session)
+      if (!sessionStorage.getItem('update-checked')) {
+        sessionStorage.setItem('update-checked', '1');
+        fetch('/api/app/update-banner')
+          .then(r => r.json())
+          .then(data => {
+            if (!data.update) return;
+            const lastSeen = localStorage.getItem('app-update-seen');
+            if (lastSeen === data.version) return;
+            const bar = document.getElementById('app-update-bar');
+            const verEl = document.getElementById('app-update-ver');
+            if (bar) {
+              if (verEl) verEl.textContent = data.version;
+              bar.dataset.url = data.download_url || '/download';
+              bar.classList.remove('d-none');
+              feather.replace();
+            }
+          }).catch(() => {});
+      }
     })();
     </script>
+
+    <!-- Admin-pushed update notification bar -->
+    <div id="app-update-bar" class="d-none position-fixed top-0 start-0 end-0" style="z-index:1060;background:#1e2030;border-bottom:2px solid #6366f1;">
+      <div class="container d-flex align-items-center gap-3 py-2">
+        <i data-feather="download-cloud" style="width:18px;height:18px;color:#818cf8;flex-shrink:0;"></i>
+        <span class="text-white small flex-grow-1">
+          App update <strong id="app-update-ver"></strong> is available —
+          <a href="/download" class="text-primary text-decoration-none fw-semibold">Download now</a>
+        </span>
+        <button class="btn btn-primary btn-sm py-1 px-3" onclick="localStorage.setItem('app-update-seen', document.getElementById('app-update-ver').textContent); document.getElementById('app-update-bar').classList.add('d-none');">
+          Later
+        </button>
+        <a href="/download" class="btn btn-sm py-1 px-3" style="background:#6366f1;color:#fff;"
+           onclick="localStorage.setItem('app-update-seen', document.getElementById('app-update-ver').textContent);">
+          <i data-feather="download" style="width:13px;height:13px;" class="me-1"></i>Get it
+        </a>
+      </div>
+    </div>
 
     <!-- PWA Install Banner (hidden until triggered) -->
     <div id="pwa-install-banner" class="d-none position-fixed bottom-0 start-0 end-0 p-3" style="z-index:1055;">

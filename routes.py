@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify, current_app, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db, csrf
-from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig, FirewallRule
+from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificationToken, APIToken, SystemConfig, FirewallRule, AppRelease
 from email_service import EmailService
 from identity_emails import send_verification_email, send_password_reset_email
 from forms import (LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm,
@@ -27,6 +27,7 @@ email_service = EmailService()
 
 MAINTENANCE_BYPASS_ROUTES = {'login', 'logout', 'static', 'maintenance_page',
                               'admin_toggle_maintenance', 'pwa_sw', 'pwa_offline',
+                              'download_page', 'download_release', 'api_app_version', 'api_update_banner',
                               'oauth_authorize', 'oauth_token', 'oauth_userinfo',
                               'oauth_discovery', 'oauth_widget'}
 
@@ -1537,6 +1538,148 @@ def not_found_error(error):
 def internal_error(error):
     db.session.rollback()
     return render_template('base.html', error_message='Internal server error'), 500
+
+# ── App Release routes ─────────────────────────────────────────────────────────
+
+RELEASES_DIR = os.path.join(os.path.dirname(__file__), 'static', 'releases')
+ALLOWED_RELEASE_EXT = {'.apk', '.ipa', '.zip'}
+MAX_RELEASE_SIZE = 200 * 1024 * 1024  # 200 MB
+
+@app.route('/download')
+def download_page():
+    android = (AppRelease.query
+               .filter_by(platform='android', is_active=True)
+               .order_by(AppRelease.created_at.desc()).first())
+    ios = (AppRelease.query
+           .filter_by(platform='ios', is_active=True)
+           .order_by(AppRelease.created_at.desc()).first())
+    return render_template('download.html', android=android, ios=ios)
+
+@app.route('/download/release/<int:release_id>')
+def download_release(release_id):
+    from flask import send_from_directory
+    rel = AppRelease.query.get_or_404(release_id)
+    return send_from_directory(RELEASES_DIR, rel.filename,
+                               as_attachment=True,
+                               download_name=rel.original_name or rel.filename)
+
+@app.route('/api/app/version')
+@csrf.exempt
+def api_app_version():
+    android = (AppRelease.query
+               .filter_by(platform='android', is_active=True)
+               .order_by(AppRelease.created_at.desc()).first())
+    ios = (AppRelease.query
+           .filter_by(platform='ios', is_active=True)
+           .order_by(AppRelease.created_at.desc()).first())
+    return jsonify({
+        'android': android.to_dict() if android else None,
+        'ios':     ios.to_dict()     if ios else None,
+    })
+
+@app.route('/admin/app-releases')
+@login_required
+def admin_app_releases():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    releases = AppRelease.query.order_by(AppRelease.created_at.desc()).all()
+    return render_template('admin/app_releases.html', releases=releases)
+
+@app.route('/admin/app-releases/upload', methods=['POST'])
+@login_required
+def admin_upload_release():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+
+    version  = request.form.get('version', '').strip()
+    platform = request.form.get('platform', 'android')
+    notes    = request.form.get('release_notes', '').strip()
+    notify   = 'notify_users' in request.form
+    f        = request.files.get('release_file')
+
+    if not version or not f or not f.filename:
+        flash('Version and file are required.', 'error')
+        return redirect(url_for('admin_app_releases'))
+
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ALLOWED_RELEASE_EXT:
+        flash(f'File type {ext} not allowed.', 'error')
+        return redirect(url_for('admin_app_releases'))
+
+    os.makedirs(RELEASES_DIR, exist_ok=True)
+    safe_ver  = version.replace('/', '-').replace('..', '')
+    stored    = f"netlifegy-{platform}-v{safe_ver}-{secrets.token_hex(4)}{ext}"
+    dest      = os.path.join(RELEASES_DIR, stored)
+    f.save(dest)
+    size      = os.path.getsize(dest)
+
+    # Deactivate previous releases for this platform
+    AppRelease.query.filter_by(platform=platform, is_active=True).update({'is_active': False})
+
+    rel = AppRelease(
+        version=version,
+        platform=platform,
+        filename=stored,
+        original_name=f.filename,
+        file_size=size,
+        release_notes=notes,
+        is_active=True,
+        uploaded_by=current_user.id,
+    )
+    db.session.add(rel)
+
+    # Store notify flag in SystemConfig so the update banner picks it up
+    if notify:
+        cfg = SystemConfig.query.filter_by(key='app_update_version').first()
+        if not cfg:
+            cfg = SystemConfig(key='app_update_version')
+            db.session.add(cfg)
+        cfg.value = version
+
+        cfg2 = SystemConfig.query.filter_by(key='app_update_platform').first()
+        if not cfg2:
+            cfg2 = SystemConfig(key='app_update_platform')
+            db.session.add(cfg2)
+        cfg2.value = platform
+
+    db.session.commit()
+    flash(f'Version {version} uploaded and published successfully.', 'success')
+    return redirect(url_for('admin_app_releases'))
+
+@app.route('/admin/app-releases/<int:release_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_release(release_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    rel = AppRelease.query.get_or_404(release_id)
+    try:
+        fp = os.path.join(RELEASES_DIR, rel.filename)
+        if os.path.exists(fp):
+            os.remove(fp)
+    except Exception:
+        pass
+    db.session.delete(rel)
+    db.session.commit()
+    flash(f'Release v{rel.version} deleted.', 'success')
+    return redirect(url_for('admin_app_releases'))
+
+@app.route('/api/app/update-banner')
+@csrf.exempt
+def api_update_banner():
+    """Returns pending update info so the PWA can show an update banner."""
+    ver_cfg = SystemConfig.query.filter_by(key='app_update_version').first()
+    plt_cfg = SystemConfig.query.filter_by(key='app_update_platform').first()
+    if not ver_cfg:
+        return jsonify({'update': False})
+    return jsonify({
+        'update': True,
+        'version': ver_cfg.value,
+        'platform': plt_cfg.value if plt_cfg else 'android',
+        'download_url': url_for('download_page', _external=True),
+    })
 
 # ── PWA routes ─────────────────────────────────────────────────────────────────
 

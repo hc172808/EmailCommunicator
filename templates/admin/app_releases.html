@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}App Releases – Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h2 class="mb-1 fw-bold"><i data-feather="smartphone" class="me-2 text-primary"></i>App Releases</h2>
+    <p class="text-muted mb-0">Upload APK / IPA files and push updates to users.</p>
+  </div>
+  <a href="{{ url_for('download_page') }}" class="btn btn-outline-secondary btn-sm" target="_blank">
+    <i data-feather="external-link" class="me-1"></i>View Download Page
+  </a>
+</div>
+
+<!-- Upload card -->
+<div class="card mb-4" style="border-color:rgba(99,102,241,.3);">
+  <div class="card-header fw-semibold" style="background:rgba(99,102,241,.1);">
+    <i data-feather="upload-cloud" class="me-2"></i>Upload New Release
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('admin_upload_release') }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Version <span class="text-danger">*</span></label>
+          <input type="text" name="version" class="form-control" placeholder="e.g. 1.2.0" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">Platform <span class="text-danger">*</span></label>
+          <select name="platform" class="form-select" required>
+            <option value="android">Android (.apk)</option>
+            <option value="ios">iOS (.ipa)</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">File <span class="text-danger">*</span></label>
+          <input type="file" name="release_file" class="form-control" accept=".apk,.ipa,.zip" required>
+          <div class="form-text">Accepted: .apk, .ipa — max 200 MB</div>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">Release Notes</label>
+          <textarea name="release_notes" class="form-control" rows="3"
+            placeholder="What's new in this version? Bug fixes, new features..."></textarea>
+        </div>
+        <div class="col-12 d-flex align-items-center gap-3">
+          <button type="submit" class="btn btn-primary">
+            <i data-feather="upload" class="me-2"></i>Upload & Publish
+          </button>
+          <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" name="notify_users" id="notifyCheck" checked>
+            <label class="form-check-label" for="notifyCheck">Show update banner to all users</label>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Current live releases -->
+{% set android_live = releases | selectattr('platform','eq','android') | selectattr('is_active') | list | first %}
+{% set ios_live     = releases | selectattr('platform','eq','ios')     | selectattr('is_active') | list | first %}
+
+<div class="row g-3 mb-4">
+  {% for label, icon, rel in [('Android', 'smartphone', android_live), ('iOS', 'tablet', ios_live)] %}
+  <div class="col-md-6">
+    <div class="card h-100 {% if rel %}border-success{% else %}border-secondary{% endif %}" style="border-opacity:.4;">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i data-feather="{{ icon }}" class="text-{% if rel %}success{% else %}muted{% endif %}"></i>
+          <span class="fw-semibold">{{ label }}</span>
+          {% if rel %}
+          <span class="badge bg-success ms-auto">Live v{{ rel.version }}</span>
+          {% else %}
+          <span class="badge bg-secondary ms-auto">No release</span>
+          {% endif %}
+        </div>
+        {% if rel %}
+        <div class="small text-muted">{{ rel.size_display() }} · {{ rel.created_at.strftime('%b %d, %Y') }}</div>
+        <div class="mt-2 d-flex gap-2">
+          <a href="{{ url_for('download_release', release_id=rel.id) }}" class="btn btn-sm btn-outline-success">
+            <i data-feather="download" style="width:14px;height:14px;" class="me-1"></i>Download
+          </a>
+          <form method="POST" action="{{ url_for('admin_delete_release', release_id=rel.id) }}" class="d-inline"
+                onsubmit="return confirm('Remove this release?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger">
+              <i data-feather="trash-2" style="width:14px;height:14px;"></i>
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- All releases table -->
+<div class="card">
+  <div class="card-header fw-semibold"><i data-feather="list" class="me-2"></i>All Releases</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Version</th>
+          <th>Platform</th>
+          <th>Size</th>
+          <th>Uploaded by</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in releases %}
+        <tr>
+          <td class="fw-semibold">{{ r.version }}</td>
+          <td>
+            <span class="badge bg-{% if r.platform == 'android' %}success{% else %}primary{% endif %} bg-opacity-25 text-{% if r.platform == 'android' %}success{% else %}primary{% endif %}">
+              {{ r.platform | capitalize }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ r.size_display() }}</td>
+          <td class="text-muted small">{{ r.uploader.username if r.uploader else '—' }}</td>
+          <td class="text-muted small">{{ r.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+          <td>
+            {% if r.is_active %}
+            <span class="badge bg-success">Active</span>
+            {% else %}
+            <span class="badge bg-secondary">Archived</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{{ url_for('download_release', release_id=r.id) }}" class="btn btn-sm btn-outline-secondary me-1">
+              <i data-feather="download" style="width:13px;height:13px;"></i>
+            </a>
+            <form method="POST" action="{{ url_for('admin_delete_release', release_id=r.id) }}" class="d-inline"
+                  onsubmit="return confirm('Delete release v{{ r.version }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger">
+                <i data-feather="trash-2" style="width:13px;height:13px;"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No releases yet. Upload your first APK above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

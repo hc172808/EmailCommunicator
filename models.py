@@ -352,3 +352,33 @@ class APIToken(db.Model):
             'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None,
             'is_active': self.is_active
         }
+
+
+class AppRelease(db.Model):
+    """Stores mobile app releases (APK / IPA) uploaded by admins."""
+    __tablename__ = 'app_releases'
+
+    id           = db.Column(Integer, primary_key=True)
+    version      = db.Column(String(32), nullable=False)          # e.g. "1.0.3"
+    platform     = db.Column(String(16), nullable=False)          # "android" | "ios"
+    filename     = db.Column(String(255), nullable=False)         # stored filename
+    original_name = db.Column(String(255))                        # original upload name
+    file_size    = db.Column(Integer, default=0)                  # bytes
+    release_notes = db.Column(Text)
+    is_active    = db.Column(Boolean, default=True)               # current published release
+    uploaded_by  = db.Column(Integer, db.ForeignKey('users.id'))
+    created_at   = db.Column(DateTime, default=datetime.utcnow)
+
+    uploader = db.relationship('User', foreign_keys=[uploaded_by])
+
+    def size_display(self):
+        mb = self.file_size / (1024 * 1024)
+        return f"{mb:.1f} MB" if mb >= 1 else f"{self.file_size // 1024} KB"
+
+    def to_dict(self):
+        return {
+            'version': self.version,
+            'platform': self.platform,
+            'release_notes': self.release_notes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
