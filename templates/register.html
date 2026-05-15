@@ -71,17 +71,23 @@
           <div class="row g-3 mb-4">
             <div class="col-md-6">
               {{ form.password.label(class="form-label") }}
-              {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
-              <div class="form-text">Minimum {{ min_pw_len }} characters</div>
+              {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), id="pw-field") }}
+              <div class="mt-1">
+                <div class="progress" style="height:5px;">
+                  <div id="pw-bar" class="progress-bar" style="width:0%;transition:width .2s;"></div>
+                </div>
+                <small id="pw-label" class="text-muted">Minimum {{ min_pw_len }} characters</small>
+              </div>
               {% if form.password.errors %}
-                <div class="invalid-feedback">{% for e in form.password.errors %}{{ e }}{% endfor %}</div>
+                <div class="invalid-feedback d-block">{% for e in form.password.errors %}{{ e }}{% endfor %}</div>
               {% endif %}
             </div>
             <div class="col-md-6">
               {{ form.password2.label(class="form-label") }}
-              {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else "")) }}
+              {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else ""), id="pw2-field") }}
+              <small id="pw-match" class="form-text"></small>
               {% if form.password2.errors %}
-                <div class="invalid-feedback">{% for e in form.password2.errors %}{{ e }}{% endfor %}</div>
+                <div class="invalid-feedback d-block">{% for e in form.password2.errors %}{{ e }}{% endfor %}</div>
               {% endif %}
             </div>
           </div>
@@ -176,5 +182,49 @@ usernameField.addEventListener('input', function() {
 });
 
 feather.replace();
+
+// Password strength meter
+const pwField  = document.getElementById('pw-field');
+const pwBar    = document.getElementById('pw-bar');
+const pwLabel  = document.getElementById('pw-label');
+const pw2Field = document.getElementById('pw2-field');
+const pwMatch  = document.getElementById('pw-match');
+const minLen   = {{ min_pw_len }};
+
+function scorePassword(pw) {
+  let score = 0;
+  if (!pw) return score;
+  if (pw.length >= minLen)   score++;
+  if (pw.length >= minLen + 4) score++;
+  if (/[A-Z]/.test(pw))      score++;
+  if (/[0-9]/.test(pw))      score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return score; // 0-5
+}
+
+const barColors = ['bg-danger','bg-danger','bg-warning','bg-info','bg-primary','bg-success'];
+const barLabels = ['Too short','Weak','Fair','Good','Strong','Very strong'];
+
+pwField.addEventListener('input', function() {
+  const s = scorePassword(this.value);
+  const pct = Math.max(this.value.length ? 10 : 0, s * 20);
+  pwBar.style.width = pct + '%';
+  barColors.forEach(c => pwBar.classList.remove(c));
+  pwBar.classList.add(barColors[s] || 'bg-danger');
+  pwLabel.textContent = this.value.length ? barLabels[s] : 'Minimum {{ min_pw_len }} characters';
+  checkMatch();
+});
+
+pw2Field.addEventListener('input', checkMatch);
+
+function checkMatch() {
+  if (!pw2Field.value) { pwMatch.textContent = ''; return; }
+  if (pw2Field.value === pwField.value) {
+    pwMatch.innerHTML = '<span class="text-success"><i data-feather="check" style="width:12px;height:12px;"></i> Passwords match</span>';
+  } else {
+    pwMatch.innerHTML = '<span class="text-danger">Passwords do not match</span>';
+  }
+  feather.replace();
+}
 </script>
 {% endblock %}

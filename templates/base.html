@@ -57,6 +57,9 @@
                         <a class="nav-link" href="{{ url_for('inbox') }}">
                             <i data-feather="inbox" class="me-1"></i>
                             Inbox
+                            {% if unread_count > 0 %}
+                            <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ unread_count }}</span>
+                            {% endif %}
                         </a>
                     </li>
                     <li class="nav-item">

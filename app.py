@@ -73,6 +73,7 @@ with app.app_context():
         "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS is_pending BOOLEAN DEFAULT FALSE",
         "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS developer_email VARCHAR(255)",
         "ALTER TABLE oauth_apps ADD COLUMN IF NOT EXISTS developer_name VARCHAR(255)",
+        "ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE",
     ]
     for _sql in _migrations:
         try:

@@ -61,6 +61,9 @@
         </a>
 
         <div class="admin-section">System</div>
+        <a class="nav-link" href="#" data-section="email-server">
+          <i data-feather="mail" style="width:16px;height:16px;"></i> Email Server
+        </a>
         <a class="nav-link" href="#" data-section="maintenance">
           <i data-feather="tool" style="width:16px;height:16px;"></i> Maintenance
         </a>
@@ -512,6 +515,38 @@ $_SESSION['user'] = $user;</pre>
       </div>
     </div>
 
+    <!-- ══ EMAIL SERVER ══ -->
+    <div class="section-panel" id="panel-email-server">
+      <h4 class="mb-1 fw-bold"><i data-feather="mail" class="me-2"></i>Email Server</h4>
+      <p class="text-muted mb-4">Test your SMTP and IMAP connections to verify the system mail configuration is working.</p>
+
+      <div class="card mb-4">
+        <div class="card-header"><h6 class="mb-0"><i data-feather="activity" class="me-2"></i>Connection Test</h6></div>
+        <div class="card-body">
+          <p class="text-muted small mb-3">Click the button below to test the SMTP and IMAP connections configured in your <code>.env</code> file.</p>
+          <button class="btn btn-primary" id="smtp-test-btn" onclick="testSmtp()">
+            <i data-feather="zap" style="width:15px;height:15px;" class="me-2"></i>Test Connections
+          </button>
+          <div id="smtp-result" class="mt-3" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h6 class="mb-0"><i data-feather="info" class="me-2"></i>Current Configuration</h6></div>
+        <div class="card-body">
+          <p class="text-muted small mb-0">Edit your <code>.env</code> file to change these settings. Restart the server after making changes.</p>
+          <table class="table table-sm mt-3 mb-0">
+            <tbody>
+              <tr><td class="text-muted" style="width:40%">SMTP Host</td><td><code>{{ smtp_host or 'Not configured' }}</code></td></tr>
+              <tr><td class="text-muted">SMTP Port</td><td><code>{{ smtp_port or 'Not configured' }}</code></td></tr>
+              <tr><td class="text-muted">SMTP Username</td><td><code>{{ smtp_user or 'Not configured' }}</code></td></tr>
+              <tr><td class="text-muted">IMAP Host</td><td><code>{{ imap_host or 'Not configured' }}</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ MAINTENANCE ══ -->
     <div class="section-panel" id="panel-maintenance">
       <h4 class="mb-1 fw-bold"><i data-feather="tool" class="me-2"></i>Maintenance Mode</h4>
@@ -605,5 +640,46 @@ function copyText(id) {
 }
 
 feather.replace();
+
+// ── SMTP Connection Test ──────────────────────────────────────
+async function testSmtp() {
+  const btn = document.getElementById('smtp-test-btn');
+  const res = document.getElementById('smtp-result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing…';
+  res.style.display = 'none';
+  try {
+    const r = await fetch('{{ url_for("admin_smtp_test") }}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': '{{ csrf_token() }}'}
+    });
+    const data = await r.json();
+    let html = '<div class="row g-3">';
+    for (const [key, val] of Object.entries(data)) {
+      const ok = val === true;
+      html += `<div class="col-sm-6">
+        <div class="card border-${ok ? 'success' : 'danger'}">
+          <div class="card-body d-flex align-items-center gap-2 py-2">
+            <i data-feather="${ok ? 'check-circle' : 'x-circle'}" style="width:18px;height:18px;" class="text-${ok ? 'success' : 'danger'} flex-shrink-0"></i>
+            <div>
+              <div class="fw-semibold text-uppercase" style="font-size:.8rem;">${key.toUpperCase()}</div>
+              <small class="${ok ? 'text-success' : 'text-danger'}">${ok ? 'Connected successfully' : val}</small>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+    res.innerHTML = html;
+    res.style.display = 'block';
+    feather.replace();
+  } catch(e) {
+    res.innerHTML = '<div class="alert alert-danger">Request failed: ' + e.message + '</div>';
+    res.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i data-feather="zap" style="width:15px;height:15px;" class="me-2"></i>Test Connections';
+  feather.replace();
+}
 </script>
 {% endblock %}

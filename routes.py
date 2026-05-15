@@ -428,18 +428,6 @@ def admin_dashboard():
                          maintenance_message=maintenance_message,
                          maintenance_features=maintenance_features)
 
-@app.route('/admin/users')
-@login_required
-def admin_users():
-    """Admin user management"""
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('index'))
-    
-    users = User.query.order_by(User.created_at.desc()).all()
-    pending_count = sum(1 for u in users if not u.active)
-    return render_template('admin/users.html', users=users, pending_count=pending_count)
-
 @app.route('/admin/users/create', methods=['GET', 'POST'])
 @login_required
 def admin_create_user():
@@ -507,6 +495,99 @@ def admin_edit_user(user_id):
         form.is_verified.data = user.is_verified
 
     return render_template('admin/edit_user.html', form=form, user=user)
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        flash('You cannot delete your own account.', 'error')
+        return redirect(url_for('admin_users'))
+    username = user.username
+    uid = user.id
+    try:
+        from models import (UserSession, APIToken, PasswordResetToken,
+                            EmailVerificationToken, OAuthAuthorizationCode,
+                            OAuthAccessToken, OAuthRefreshToken, AdminAuditLog)
+        UserSession.query.filter_by(user_id=uid).delete()
+        APIToken.query.filter_by(user_id=uid).delete()
+        PasswordResetToken.query.filter_by(user_id=uid).delete()
+        EmailVerificationToken.query.filter_by(user_id=uid).delete()
+        OAuthAuthorizationCode.query.filter_by(user_id=uid).delete()
+        OAuthAccessToken.query.filter_by(user_id=uid).delete()
+        OAuthRefreshToken.query.filter_by(user_id=uid).delete()
+        AdminAuditLog.query.filter_by(admin_id=uid).delete()
+        Email.query.filter(
+            db.or_(Email.sender_id == uid, Email.recipient_id == uid)
+        ).delete(synchronize_session='fetch')
+        # Record audit before deleting admin's own log entries
+        _audit('delete_user', 'user', uid, f'{username} ({user.email})')
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User "{username}" has been permanently deleted.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Delete user error: {e}')
+        flash('Could not delete user — see server logs.', 'error')
+    return redirect(url_for('admin_users'))
+
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('index'))
+    q = request.args.get('q', '').strip()
+    query = User.query
+    if q:
+        query = query.filter(
+            db.or_(User.username.ilike(f'%{q}%'), User.email.ilike(f'%{q}%'),
+                   User.full_name.ilike(f'%{q}%'))
+        )
+    users = query.order_by(User.created_at.desc()).all()
+    pending_count = sum(1 for u in users if not u.active)
+    return render_template('admin/users.html', users=users, pending_count=pending_count, q=q)
+
+
+@app.route('/admin/smtp-test', methods=['POST'])
+@login_required
+@csrf.exempt
+def admin_smtp_test():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    results = email_service.test_connection()
+    return jsonify(results)
+
+
+@app.route('/admin/users/export-csv')
+@login_required
+def admin_export_users_csv():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    import csv, io
+    users = User.query.order_by(User.created_at.desc()).all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Username', 'Email', 'Full Name', 'Active', 'Admin', 'Verified', 'Joined', 'Last Login'])
+    for u in users:
+        writer.writerow([
+            u.id, u.username, u.email, u.full_name,
+            u.active, u.is_admin, u.is_verified,
+            u.created_at.strftime('%Y-%m-%d') if u.created_at else '',
+            u.last_login.strftime('%Y-%m-%d %H:%M') if u.last_login else 'Never',
+        ])
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=users.csv'}
+    )
+
 
 @app.route('/admin/users/<int:user_id>/approve', methods=['POST'])
 @login_required
@@ -1002,10 +1083,23 @@ def sent():
     emails = query.order_by(Email.sent_at.desc()).paginate(page=page, per_page=25, error_out=False)
     return render_template('sent.html', emails=emails, q=q)
 
+@app.context_processor
+def inject_unread_count():
+    try:
+        if current_user.is_authenticated:
+            count = Email.query.filter_by(is_received=True, is_read=False).count()
+            return {'unread_count': count}
+    except Exception:
+        pass
+    return {'unread_count': 0}
+
 @app.route('/email/<int:email_id>')
+@login_required
 def email_detail(email_id):
-    """View email details"""
     email = Email.query.get_or_404(email_id)
+    if email.is_received and not email.is_read:
+        email.is_read = True
+        db.session.commit()
     return render_template('email_detail.html', email=email)
 
 @app.route('/email/<int:email_id>/delete', methods=['POST'])
@@ -1395,6 +1489,7 @@ def admin_settings():
     }
     # Pending approval count
     pending_users = User.query.filter_by(active=False).count()
+    import os as _os
     return render_template('admin/settings.html',
         maintenance_on=maintenance_on,
         maintenance_message=maintenance_message,
@@ -1404,7 +1499,11 @@ def admin_settings():
         firewall_rules=firewall_rules,
         base_url=base_url,
         org=org,
-        pending_users=pending_users)
+        pending_users=pending_users,
+        smtp_host=_os.environ.get('SMTP_SERVER', ''),
+        smtp_port=_os.environ.get('SMTP_PORT', ''),
+        smtp_user=_os.environ.get('SMTP_USERNAME', ''),
+        imap_host=_os.environ.get('IMAP_SERVER', ''))
 
 
 @app.route('/admin/firewall/add', methods=['POST'])

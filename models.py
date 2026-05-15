@@ -84,6 +84,7 @@ class Email(db.Model):
     is_sent = db.Column(Boolean, default=False)
     is_received = db.Column(Boolean, default=False)
     is_draft = db.Column(Boolean, default=False)
+    is_read = db.Column(Boolean, default=False)
     message_id = db.Column(String(255), unique=True)
     in_reply_to = db.Column(String(255))
     error_message = db.Column(Text)
