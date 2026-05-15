@@ -5,7 +5,8 @@ from models import Email, EmailConfig, User, PasswordResetToken, EmailVerificati
 from email_service import EmailService
 from identity_emails import send_verification_email, send_password_reset_email
 from forms import (LoginForm, RegistrationForm, ProfileForm, ChangePasswordForm, AdminUserForm,
-                   ForgotPasswordForm, ResetPasswordForm, TwoFactorSetupForm, TwoFactorVerifyForm, APITokenForm)
+                   AdminCreateUserForm, ForgotPasswordForm, ResetPasswordForm,
+                   TwoFactorSetupForm, TwoFactorVerifyForm, APITokenForm)
 from security import security_manager, security_check, login_security_check, SecurityBan, SecurityLog
 from backup_service import backup_service
 from domain_config import domain_manager, DomainConfig
@@ -430,38 +431,72 @@ def admin_users():
     pending_count = sum(1 for u in users if not u.active)
     return render_template('admin/users.html', users=users, pending_count=pending_count)
 
+@app.route('/admin/users/create', methods=['GET', 'POST'])
+@login_required
+def admin_create_user():
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('index'))
+    from models import SystemConfig
+    org_domain = SystemConfig.get('org_domain', 'netlifegy.com')
+    form = AdminCreateUserForm()
+    if form.validate_on_submit():
+        username = form.username.data.lower().strip()
+        email    = f"{username}@{org_domain}"
+        if User.query.filter_by(username=username).first():
+            flash(f'Username "{username}" is already taken.', 'error')
+        elif User.query.filter_by(email=email).first():
+            flash(f'Email "{email}" is already in use.', 'error')
+        else:
+            new_user = User(
+                username    = username,
+                email       = email,
+                full_name   = form.full_name.data,
+                active      = form.active.data,
+                is_admin    = form.is_admin.data,
+                is_verified = form.is_verified.data,
+            )
+            new_user.set_password(form.password.data)
+            db.session.add(new_user)
+            db.session.commit()
+            _audit('create_user', 'user', new_user.id, f'{username} ({email})')
+            flash(f'User {username} created successfully.', 'success')
+            return redirect(url_for('admin_users'))
+    return render_template('admin/create_user.html', form=form, org_domain=org_domain)
+
+
 @app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
 def admin_edit_user(user_id):
-    """Admin edit user"""
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('index'))
-    
+
     user = User.query.get_or_404(user_id)
     form = AdminUserForm()
-    
+
     if form.validate_on_submit():
-        user.username = form.username.data
-        user.email = form.email.data
-        user.full_name = form.full_name.data
-        user.active = form.active.data
-        user.is_admin = form.is_admin.data
+        user.username    = form.username.data
+        user.email       = form.email.data
+        user.full_name   = form.full_name.data
+        user.active      = form.active.data
+        user.is_admin    = form.is_admin.data
         user.is_verified = form.is_verified.data
-        
+        if form.new_password.data:
+            user.set_password(form.new_password.data)
         db.session.commit()
         _audit('edit_user', 'user', user.id, f'{user.username} — active={user.active} admin={user.is_admin}')
         flash(f'User {user.username} has been updated!', 'success')
         return redirect(url_for('admin_users'))
-    
+
     elif request.method == 'GET':
-        form.username.data = user.username
-        form.email.data = user.email
-        form.full_name.data = user.full_name
-        form.active.data = user.active
-        form.is_admin.data = user.is_admin
+        form.username.data    = user.username
+        form.email.data       = user.email
+        form.full_name.data   = user.full_name
+        form.active.data      = user.active
+        form.is_admin.data    = user.is_admin
         form.is_verified.data = user.is_verified
-    
+
     return render_template('admin/edit_user.html', form=form, user=user)
 
 @app.route('/admin/users/<int:user_id>/approve', methods=['POST'])

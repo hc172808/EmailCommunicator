@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Create User – Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary btn-sm">
+    <i data-feather="arrow-left" style="width:14px;height:14px;" class="me-1"></i>Back
+  </a>
+  <h2 class="fw-bold mb-0"><i data-feather="user-plus" class="me-2 text-primary"></i>Create User</h2>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body p-4">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.full_name.label(class="form-label fw-semibold") }}
+            {{ form.full_name(class="form-control" + (" is-invalid" if form.full_name.errors else ""), placeholder="Full Name") }}
+            {% for e in form.full_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.username.label(class="form-label fw-semibold") }}
+            <div class="input-group">
+              {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), placeholder="username") }}
+              <span class="input-group-text text-muted">@{{ org_domain }}</span>
+            </div>
+            {% for e in form.username.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+            <div class="form-text">Email will be set to <strong>username@{{ org_domain }}</strong></div>
+          </div>
+
+          <div class="mb-4">
+            {{ form.password.label(class="form-label fw-semibold") }}
+            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="At least 6 characters", autocomplete="new-password") }}
+            {% for e in form.password.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <hr class="my-3">
+          <p class="text-muted small fw-semibold mb-2">Account Flags</p>
+
+          <div class="row g-2 mb-4">
+            <div class="col-auto">
+              <div class="form-check form-switch">
+                {{ form.active(class="form-check-input", role="switch") }}
+                {{ form.active.label(class="form-check-label") }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check form-switch">
+                {{ form.is_verified(class="form-check-input", role="switch") }}
+                {{ form.is_verified.label(class="form-check-label") }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check form-switch">
+                {{ form.is_admin(class="form-check-input", role="switch") }}
+                {{ form.is_admin.label(class="form-check-label") }}
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            {{ form.submit(class="btn btn-primary px-4") }}
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

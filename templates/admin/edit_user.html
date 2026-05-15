@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Edit User – Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary btn-sm">
+    <i data-feather="arrow-left" style="width:14px;height:14px;" class="me-1"></i>Back
+  </a>
+  <h2 class="fw-bold mb-0">
+    <i data-feather="edit" class="me-2 text-primary"></i>Edit User
+    <span class="text-muted fw-normal fs-5 ms-2">@{{ user.username }}</span>
+  </h2>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body p-4">
+        <form method="POST">
+          {{ form.hidden_tag() }}
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              {{ form.full_name.label(class="form-label fw-semibold") }}
+              {{ form.full_name(class="form-control" + (" is-invalid" if form.full_name.errors else "")) }}
+              {% for e in form.full_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-md-6">
+              {{ form.username.label(class="form-label fw-semibold") }}
+              {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else "")) }}
+              {% for e in form.username.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            {{ form.email.label(class="form-label fw-semibold") }}
+            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+            {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-4">
+            {{ form.new_password.label(class="form-label fw-semibold") }}
+            {{ form.new_password(class="form-control" + (" is-invalid" if form.new_password.errors else ""),
+               placeholder="Leave blank to keep current password", autocomplete="new-password") }}
+            {% for e in form.new_password.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            <div class="form-text">Only fill this in if you want to change the user's password.</div>
+          </div>
+
+          <hr class="my-3">
+          <p class="text-muted small fw-semibold mb-2">Account Flags</p>
+
+          <div class="row g-3 mb-4">
+            <div class="col-auto">
+              <div class="form-check form-switch">
+                {{ form.active(class="form-check-input", role="switch") }}
+                {{ form.active.label(class="form-check-label") }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check form-switch">
+                {{ form.is_verified(class="form-check-input", role="switch") }}
+                {{ form.is_verified.label(class="form-check-label") }}
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check form-switch">
+                {{ form.is_admin(class="form-check-input", role="switch") }}
+                {{ form.is_admin.label(class="form-check-label") }}
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            {{ form.submit(class="btn btn-primary px-4") }}
+            <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">Cancel</a>
+            {% if user.id != current_user.id %}
+              {% if user.active %}
+              <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=user.id) }}" class="ms-auto"
+                    onsubmit="return confirm('Deactivate {{ user.username }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-danger">
+                  <i data-feather="user-x" style="width:14px;height:14px;" class="me-1"></i>Deactivate
+                </button>
+              </form>
+              {% else %}
+              <form method="POST" action="{{ url_for('admin_approve_user', user_id=user.id) }}" class="ms-auto">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-success">
+                  <i data-feather="user-check" style="width:14px;height:14px;" class="me-1"></i>Approve & Activate
+                </button>
+              </form>
+              {% endif %}
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Account info card -->
+    <div class="card mt-3">
+      <div class="card-body py-3">
+        <div class="row text-center">
+          <div class="col-4 border-end">
+            <div class="fw-bold">{{ user.created_at.strftime('%b %d, %Y') if user.created_at else '—' }}</div>
+            <small class="text-muted">Joined</small>
+          </div>
+          <div class="col-4 border-end">
+            <div class="fw-bold">{{ user.last_login.strftime('%b %d, %Y') if user.last_login else 'Never' }}</div>
+            <small class="text-muted">Last Login</small>
+          </div>
+          <div class="col-4">
+            <div class="fw-bold">{{ user.emails_sent.count() }}</div>
+            <small class="text-muted">Emails Sent</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -114,7 +114,17 @@ class AdminUserForm(FlaskForm):
     active = BooleanField('Active')
     is_admin = BooleanField('Admin')
     is_verified = BooleanField('Verified')
+    new_password = PasswordField('New Password (leave blank to keep current)', validators=[Optional(), Length(min=6)])
     submit = SubmitField('Update User')
+
+class AdminCreateUserForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=20)])
+    full_name = StringField('Full Name', validators=[DataRequired(), Length(min=2, max=100)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
+    active = BooleanField('Active', default=True)
+    is_admin = BooleanField('Admin')
+    is_verified = BooleanField('Mark as Verified', default=True)
+    submit = SubmitField('Create User')
 
 class ForgotPasswordForm(FlaskForm):
     email = StringField('Email Address', validators=[DataRequired(), Email()])

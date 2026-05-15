@@ -1,50 +1,42 @@
 #!/usr/bin/env python3
 """
-Script to create the first admin user for the email server
+Script to create or update the netlifegy admin user.
+Run with: python create_admin.py
 """
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from app import app, db
 from models import User
 
-def create_admin_user():
+def create_or_update_admin():
     with app.app_context():
-        # Check if admin already exists
-        admin = User.query.filter_by(is_admin=True).first()
-        if admin:
-            print(f"Admin user already exists: {admin.username} ({admin.email})")
-            return
-        
-        # Create admin user
-        admin_user = User(
-            username='netlifegy',
-            email='netlifegy@emailserver.local',
-            full_name='System Administrator',
-            phone_number='+1234567890',
-            location='Server Location',
-            bio='System administrator for the email server',
-            active=True,
-            is_admin=True,
-            is_verified=True,
-            smtp_server='smtp.gmail.com',
-            smtp_port=587,
-            smtp_username='netlifegy@emailserver.local',
-            imap_server='imap.gmail.com',
-            imap_port=993,
-            use_tls=True
-        )
-        
-        # Set password
-        admin_user.set_password('Zxcvbnm90')
-        
-        # Save to database
-        db.session.add(admin_user)
-        db.session.commit()
-        
-        print("✓ Admin user created successfully!")
-        print("Username: netlifegy")
-        print("Password: Zxcvbnm90")
-        print("Email: netlifegy@emailserver.local")
-        print("\nAdmin account is ready for use.")
+        user = User.query.filter_by(username='netlifegy').first()
+        if user:
+            user.email       = 'netlifegy@netlifegy.com'
+            user.full_name   = user.full_name or 'Netlifegy Admin'
+            user.is_admin    = True
+            user.active      = True
+            user.is_verified = True
+            user.set_password('Zaq12wsx')
+            db.session.commit()
+            print(f"Updated: {user.username} / {user.email}")
+        else:
+            user = User(
+                username    = 'netlifegy',
+                email       = 'netlifegy@netlifegy.com',
+                full_name   = 'Netlifegy Admin',
+                is_admin    = True,
+                active      = True,
+                is_verified = True,
+            )
+            user.set_password('Zaq12wsx')
+            db.session.add(user)
+            db.session.commit()
+            print(f"Created: {user.username} / {user.email}")
+
+        print("Login → username: netlifegy  password: Zaq12wsx")
 
 if __name__ == '__main__':
-    create_admin_user()
+    create_or_update_admin()
