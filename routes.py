@@ -228,9 +228,18 @@ def register():
 
             if require_approval:
                 flash(f'Account created ({auto_email}). An admin must approve it before you can sign in.', 'info')
+                return redirect(url_for('login'))
             else:
-                flash(f'Welcome! Your account {auto_email} was created. Check your email to verify.', 'success')
-            return redirect(url_for('login'))
+                # Auto-login and go straight to dashboard
+                login_user(user)
+                user.last_login = datetime.utcnow()
+                tok = secrets.token_hex(32)
+                session['session_token'] = tok
+                db.session.add(UserSession(user_id=user.id, session_token=tok,
+                    ip_address=_client_ip(), user_agent=request.user_agent.string))
+                db.session.commit()
+                flash(f'Welcome, {user.full_name}! Your account has been created.', 'success')
+                return redirect(url_for('index'))
 
         except Exception as e:
             db.session.rollback()
